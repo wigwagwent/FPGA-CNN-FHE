@@ -4,6 +4,7 @@ from tensorflow.keras.datasets import mnist
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 from tensorflow.keras.utils import to_categorical
+import json
 
 # Function to preprocess MNIST data
 def preprocess_data():
@@ -21,12 +22,14 @@ def quantize_weights(weights, bit_width=8):
     quantized_weights = [np.clip(np.round(w * scale), 0, scale).astype(np.uint8) for w in weights]
     return quantized_weights
 
-# Function to save weights in binary format
-def save_weights_bin(weights, filename='weights.bin'):
-    with open(filename, 'wb') as f:
-        for w in weights:
-            # Flatten the weights and write as binary data
-            f.write(w.tobytes())
+# Function to save weights in JSON format
+def save_weights_json(weights, filename='weights.json'):
+    # Convert weights (NumPy arrays) to lists for serialization
+    weights_list = [w.tolist() for w in weights]
+    
+    # Write the weights to a JSON file
+    with open(filename, 'w') as f:
+        json.dump(weights_list, f)
 
 # Define and compile the CNN model
 def create_cnn_model():
@@ -55,14 +58,14 @@ def main():
     print(f'/n/nWeights /n {weights}')
     first_layer_weights = model.layers[0].get_weights()[0]
     first_layer_biases  = model.layers[0].get_weights()[1]
-    second_layer_weights = model.layers[1].get_weights()[0]
-    second_layer_biases  = model.layers[1].get_weights()[1]
+    second_layer_weights = model.layers[2].get_weights()[0]
+    second_layer_biases  = model.layers[2].get_weights()[1]
     print(f'/n/nFirst Layer weights /n {first_layer_weights}')
     print(f'/n/nFirst Layer biases /n {first_layer_biases}')
     print(f'/n/nSecond Layer weights /n {second_layer_weights}')
     print(f'/n/nSecond Layer biases /n {second_layer_biases}')
-    quantized_weights = quantize_weights(weights)
-    save_weights_bin(quantized_weights)
+    # quantized_weights = quantize_weights(weights)
+    save_weights_json(weights)
 
 if __name__ == "__main__":
     main()
