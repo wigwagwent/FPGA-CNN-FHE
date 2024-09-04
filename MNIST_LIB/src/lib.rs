@@ -1,12 +1,13 @@
-use std::fs::File;
-use std::io::Read;
+// use std::fs::File;
+// use std::io::Read;
 
 
-fn read_mnist_image_file(file_path: &str) -> Vec<MnistImageData> {
+fn read_mnist_image_file(_file_path: &str) -> Vec<MnistImageData> {
     // Read Image data
-    let mut image_file = File::open(file_path).expect(format!("{} file not found", file_path).as_str());
-    let mut image_buffer = Vec::new();
-    image_file.read_to_end(&mut image_buffer).unwrap();
+    //let mut image_file = File::open(file_path).expect(format!("{} file not found", file_path).as_str());
+    //let mut image_buffer = Vec::new();
+    //image_file.read_to_end(&mut image_buffer).unwrap();
+    let image_buffer = include_bytes!("../data/t10k-images.idx3-ubyte").to_vec();
 
     // Extract Image data
     assert!(image_buffer[0] == 0 && image_buffer[1] == 0 && image_buffer[2] == 8 && image_buffer[3] == 3); // Magic number
@@ -21,12 +22,14 @@ fn read_mnist_image_file(file_path: &str) -> Vec<MnistImageData> {
     let mut mnist_images: Vec<MnistImageData> = Vec::new();
 
     for _ in 0..num_images {
-        let mut image_data = [[0; 28]; 28];
-        for i in 0..28 {
-            for j in 0..28 {
-                image_data[i][j] = image_buffer[offset];
+        let mut image_data: Vec<Vec<u8>> = Vec::new();
+        for _ in 0..28 {
+            let mut row = Vec::new();
+            for _ in 0..28 {
+                row.push(image_buffer[offset]);
                 offset += 1;
             }
+            image_data.push(row);
         }
         mnist_images.push(image_data);
 
@@ -35,11 +38,12 @@ fn read_mnist_image_file(file_path: &str) -> Vec<MnistImageData> {
     mnist_images
 }
 
-fn read_mnist_label_file(file_path: &str) -> Vec<MnistDigit> {
+fn read_mnist_label_file(_file_path: &str) -> Vec<MnistDigit> {
     // Read Label data
-    let mut label_file = File::open(file_path).expect(format!("{} file not found", file_path).as_str());
-    let mut label_buffer = Vec::new();
-    label_file.read_to_end(&mut label_buffer).unwrap();
+    // let mut label_file = File::open(file_path).expect(format!("{} file not found", file_path).as_str());
+    // let mut label_buffer = Vec::new();
+    // label_file.read_to_end(&mut label_buffer).unwrap();
+    let label_buffer = include_bytes!("../data/t10k-labels.idx1-ubyte").to_vec();
 
     // Extract Label data
     assert!(label_buffer[0] == 0 && label_buffer[1] == 0 && label_buffer[2] == 8 && label_buffer[3] == 1); // Magic number
@@ -67,12 +71,12 @@ pub fn load_mnist_dataset() -> Vec<MnistImage> {
     assert!(image_data.len() == label_data.len()); // Check if Image and Label data have same number of elements
 
     // Combine Image and Label data
-    image_data.iter().zip(label_data.iter()).map(|(image, label)| MnistImage { data: *image, label: *label }).collect()
+    image_data.iter().zip(label_data.iter()).map(|(image, label)| MnistImage { data: image.clone(), label: *label }).collect()
 }
 
-pub type MnistImageData = [[u8; 28]; 28];
+pub type MnistImageData = Vec<Vec<u8>>;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MnistDigit {
     Zero,
     One,
@@ -130,6 +134,7 @@ pub struct MnistImage {
 #[cfg(test)]
 mod tests {
     use std::io::Write;
+    use std::fs::File;
 use image::ImageBuffer;
 
     use super::*;
@@ -139,7 +144,7 @@ use image::ImageBuffer;
         let image_data = read_mnist_image_file("data/t10k-images.idx3-ubyte");
         let label_data = read_mnist_label_file("data/t10k-labels.idx1-ubyte");
 
-        let image_0 = image_data[0];
+        let image_0 = image_data[0].clone();
         let label_0 = label_data[0];
 
         let image_buffer: ImageBuffer<image::Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(28, 28, image_0.iter().flatten().cloned().collect()).unwrap();
@@ -154,7 +159,7 @@ use image::ImageBuffer;
         let image_data = read_mnist_image_file("data/t10k-images.idx3-ubyte");
         let label_data = read_mnist_label_file("data/t10k-labels.idx1-ubyte");
 
-        let image_100 = image_data[100];
+        let image_100 = image_data[100].clone();
         let label_100 = label_data[100];
 
         let image_buffer: ImageBuffer<image::Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(28, 28, image_100.iter().flatten().cloned().collect()).unwrap();
