@@ -1,18 +1,19 @@
 use model_layers::layers::{dense_layer, flatten_layer};
 use model_layers::{VecD1, VecD2, Weights};
-use mnist_lib;
+use mnist_lib::{self, MnistImage};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
+use std::fs::{self, File};
+use std::io::Write;
 
 mod model_layers;
-
 
 fn main() {
     // Load quantized weights from JSON
     let weights: Vec<Weights> = read_weights_from_json("../mnist_weights/weights.json");
 
     // Load MNIST dataset
-    let images = mnist_lib::load_mnist_dataset();
+    let images: Vec<MnistImage> = mnist_lib::load_mnist_dataset().into_iter().take(1).collect();
     let img_count = images.len();
 
     // Use atomic variables for thread-safe counting
@@ -20,17 +21,30 @@ fn main() {
     let incorrect_count = AtomicUsize::new(0);
 
     // Use Rayon's parallel iterator
-    images.par_iter().for_each(|image| {
+    images.par_iter().enumerate().for_each(|(idx, image)| {
         let image_data: VecD2 = image.data.iter()
             .map(|row| row.iter().map(|&pixel| pixel as f32).collect())
             .collect();
 
+        // Save the input image for comparison
+        save_to_file(format!("intermediate_output_rust_image_{}.json", idx).as_str(), serde_json::to_string_pretty(&image_data).expect("Failed to serialize image data").as_str());
+
         let predicted_result = {
             let mut w = weights.clone();
-            let model = model_layers::layers::convolution_layer(image_data, w.split_off(w.len() - 8), model_layers::Activation::ReLU(0.0));
-            let model = flatten_layer(model);
-            let model = dense_layer(model, w.split_off(w.len() - 10), model_layers::Activation::Softmax);
-            get_predicted_class(model)
+
+            // Convolution Layer
+            let conv_output = model_layers::layers::convolution_layer(image_data.clone(), w.split_off(w.len() - 8), model_layers::Activation::ReLU(0.0));
+            save_to_file(format!("intermediate_output_rust_conv_{}.json", idx).as_str(), serde_json::to_string_pretty(&conv_output).expect("Failed to serialize convolution output").as_str());
+
+            // Flatten Layer
+            let flatten_output = flatten_layer(conv_output.clone());
+            save_to_file(format!("intermediate_output_rust_flatten_{}.json", idx).as_str(), serde_json::to_string_pretty(&flatten_output).expect("Failed to serialize flatten output").as_str());
+
+            // Dense Layer
+            let dense_output = dense_layer(flatten_output.clone(), w.split_off(w.len() - 10), model_layers::Activation::Softmax);
+            save_to_file(format!("intermediate_output_rust_dense_{}.json", idx).as_str(), serde_json::to_string_pretty(&dense_output).expect("Failed to serialize dense output").as_str());
+
+            get_predicted_class(dense_output)
         };
 
         if image.label == mnist_lib::MnistDigit::from_usize(predicted_result) {
@@ -49,44 +63,9 @@ fn main() {
     println!("Accuracy: {:.2}%", final_correct_count as f32 / img_count as f32 * 100.0);
 }
 
-// fn main() {
-//     // Load quantized weights from JSON
-//     let weights: Vec<Weights> = read_weights_from_json("../mnist_weights/weights.json");
-
-//     // Load MNIST dataset
-//     let images = mnist_lib::load_mnist_dataset();
-//     let img_count = images.len();
-
-//     let mut correct_count = 0;
-//     let mut incorrect_count = 0;
-
-//     // Iterate through all images
-//     for image in images {
-//         let image_data: VecD2 = image.data.iter()
-//             .map(|row| row.iter().map(|&pixel| pixel as f32).collect())
-//             .collect();
-
-//         let predicted_result = {
-//             let mut w = weights.clone();
-//             let model = model_layers::layers::convolution_layer(image_data, w.split_off(w.len() - 8), model_layers::Activation::ReLU(0.0));
-//             let model = flatten_layer(model);
-//             let model = dense_layer(model, w.split_off(w.len() - 10), model_layers::Activation::Softmax);
-//             get_predicted_class(model)
-//         };
-
-//         if image.label == mnist_lib::MnistDigit::from_usize(predicted_result) {
-//             correct_count += 1;
-//         } else {
-//             incorrect_count += 1;
-//         }
-//     }
-
-//     println!("Total images: {}", img_count);
-//     println!("Correct predictions: {}", correct_count);
-//     println!("Incorrect predictions: {}", incorrect_count);
-//     println!("Accuracy: {:.2}%", correct_count as f32 / img_count as f32 * 100.0);
-// }
-
+fn save_to_file(filename: &str, data: &str) {
+    fs::write(filename, data).expect("Unable to write data");
+}
 
 fn read_weights_from_json(filename: &str) -> Vec<Weights> {
     let json_str = std::fs::read_to_string(filename).expect("Failed to read weights from JSON file");

@@ -24,4 +24,5 @@ pub enum Weights {
 pub enum Activation {
     ReLU(Quantized),
     Softmax,
+    None,
 }
