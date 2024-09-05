@@ -12,12 +12,10 @@ pub fn convolution_layer(input: VecD2, weights: Vec<Weights>, activation: Activa
 }
 
 fn convolution(input: &VecD2, weights: &Weights, activation: Activation) -> VecD2 {
-    // TODO: Implement bias
     let (kernel, bias) = match weights {
         Weights::Convolution { kernel, bias } => (kernel, bias),
         _ => panic!("Invalid weights for convolution layer"),
     };
-    
 
     let (input_height, input_width) = (input.len(), input[0].len());
     let (kernel_height, kernel_width) = (kernel.len(), kernel[0].len());
@@ -28,15 +26,17 @@ fn convolution(input: &VecD2, weights: &Weights, activation: Activation) -> VecD
     let output_width = input_width - kernel_width + 1;
 
     let mut output: VecD2 = vec![vec![0 as Quantized; output_width]; output_height];
-    
+
     for i in 0..output_height {
         for j in 0..output_width {
             let mut sum = 0 as Quantized;
-            for ki in 0..3 {
-                for kj in 0..3 {
+            for ki in 0..kernel_height {
+                for kj in 0..kernel_width {
                     sum += input[i + ki][j + kj] * kernel[ki][kj];
                 }
             }
+            // Add bias to the sum
+            sum += bias;
             output[i][j] = sum;
         }
     }
