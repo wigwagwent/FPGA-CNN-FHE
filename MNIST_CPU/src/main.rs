@@ -45,7 +45,7 @@ fn main() {
 fn read_weights_from_json(filename: &str) -> Vec<Weights> {
     let json_str = std::fs::read_to_string(filename).expect("Failed to read weights from JSON file");
     let mut weights: Vec<Weights> = serde_json::from_str(&json_str).expect("Failed to parse weights from JSON");
-    weights.reserve(0);
+    weights.reverse();
     weights
 }
 

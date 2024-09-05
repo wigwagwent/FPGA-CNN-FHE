@@ -20,11 +20,12 @@ fn convolution(input: &VecD2, weights: &Weights, activation: Activation) -> VecD
     
 
     let (input_height, input_width) = (input.len(), input[0].len());
+    let (kernel_height, kernel_width) = (kernel.len(), kernel[0].len());
 
-    assert!(input_height < 3 || input_width < 3);
+    assert!(input_height > kernel_height || input_width > kernel_width);
 
-    let output_height = input_height - kernel.len() + 1;
-    let output_width = input_width - kernel.len() + 1;
+    let output_height = input_height - kernel_height + 1;
+    let output_width = input_width - kernel_width + 1;
 
     let mut output: VecD2 = vec![vec![0 as Quantized; output_width]; output_height];
     
