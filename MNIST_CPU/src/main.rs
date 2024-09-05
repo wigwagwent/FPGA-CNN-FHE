@@ -1,25 +1,12 @@
-use std::fs::File;
-use std::io::BufReader;
-use serde::{Deserialize};
-use serde_json::from_reader;
 use model_layers::layers::{dense_layer, flatten_layer};
-use crate::model_layers::KernelExt;
-use model_layers::{Kernel, VecD1, VecD2, Weights};
+use model_layers::{VecD1, VecD2, Weights};
 use MNIST_LIB;
 
 mod model_layers;
-// Structs to represent weights loaded from JSON
-#[derive(Deserialize)]
-struct WeightData {
-    conv_weights: Vec<Vec<Vec<Vec<f32>>>>,
-    conv_bias: VecD1, // Changed from f32 to Vec<f32>
-    dense_weights: VecD2,
-    dense_bias: VecD1,
-}
 
 fn main() {
     // Load quantized weights from JSON
-    let weights: Vec<Weights> = read_weights_from_json("weights.json");
+    let weights: Vec<Weights> = read_weights_from_json("../MNIST_WEIGHTS/weights.json");
 
     // Load MNIST dataset
     let images = MNIST_LIB::load_mnist_dataset();
@@ -56,27 +43,9 @@ fn main() {
 }
 
 fn read_weights_from_json(filename: &str) -> Vec<Weights> {
-    let file = File::open(filename).expect("Failed to open JSON file");
-    let reader = BufReader::new(file);
-
-    // Parse the JSON into a vector of WeightData structs
-    let weight_data: Vec<WeightData> = from_reader(reader).expect("Failed to parse JSON");
-
-    // Convert the parsed JSON data into the appropriate Weights enum structure
-    let mut weights: Vec<Weights> = Vec::new();
-
-    // Assuming first 8 layers are convolution layers and remaining are dense layers
-    // for w in weight_data.iter().take(8) {
-    //     let kernels = Kernel::new(w.conv_weights.clone()); // Handle multiple kernels
-    //     for kernel in kernels {
-    //         weights.push(Weights::Convolution(kernel, w.conv_bias));
-    //     }
-    // }
-
-    // for w in weight_data.iter().skip(8) {
-    //     weights.push(Weights::Dense(w.dense_weights.clone(), w.dense_bias));
-    // }
-
+    let json_str = std::fs::read_to_string(filename).expect("Failed to read weights from JSON file");
+    let mut weights: Vec<Weights> = serde_json::from_str(&json_str).expect("Failed to parse weights from JSON");
+    weights.reserve(0);
     weights
 }
 

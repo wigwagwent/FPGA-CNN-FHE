@@ -14,9 +14,10 @@ pub fn convolution_layer(input: VecD2, weights: Vec<Weights>, activation: Activa
 fn convolution(input: &VecD2, weights: &Weights, activation: Activation) -> VecD2 {
     // TODO: Implement bias
     let (kernel, bias) = match weights {
-        Weights::Convolution(kernel, bias) => (kernel, bias),
+        Weights::Convolution { kernel, bias } => (kernel, bias),
         _ => panic!("Invalid weights for convolution layer"),
     };
+    
 
     let (input_height, input_width) = (input.len(), input[0].len());
 
@@ -58,9 +59,10 @@ pub fn dense_layer(inputs: VecD1, weights: Vec<Weights>, activation: Activation)
 
 fn dense(inputs: VecD1, weights: Weights) -> Quantized {
     let (weights, bias) = match weights {
-        Weights::Dense(weights, bias) => (weights, bias),
-        _ => panic!("Invalid weights for convolution layer"),
+        Weights::Dense { weights, bias } => (weights, bias),
+        _ => panic!("Invalid weights for dense layer"),
     };
+    
     // Ensure that the number of inputs matches the number of weights
     assert_eq!(inputs.len(), weights.len(), "Number of inputs must match the number of weights.");
     

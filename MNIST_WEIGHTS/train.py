@@ -23,13 +23,34 @@ def quantize_weights(weights, bit_width=8):
     return quantized_weights
 
 # Function to save weights in JSON format
-def save_weights_json(weights, filename='weights.json'):
-    # Convert weights (NumPy arrays) to lists for serialization
-    weights_list = [w.tolist() for w in weights]
-    
+def save_weights_json(model, filename='weights.json'):
+    weights_list = []
+
+    for layer in model.layers:
+        if isinstance(layer, tf.keras.layers.Conv2D):
+            # Convolutional layer
+            w, b = layer.get_weights()
+            for i in range(w.shape[3]):  # For each output channel
+                kernel = w[:,:,0,i].tolist()  # Take only the first channel for 3x3 kernel
+                weights_list.append({
+                    "type": "Convolution",
+                    "kernel": kernel,
+                    "bias": float(b[i])
+                })
+
+        elif isinstance(layer, tf.keras.layers.Dense):
+            # Dense layer
+            w, b = layer.get_weights()
+            for i in range(w.shape[1]):  # For each neuron
+                weights_list.append({
+                    "type": "Dense",
+                    "weights": w[:, i].tolist(),
+                    "bias": float(b[i])
+                })
+
     # Write the weights to a JSON file
     with open(filename, 'w') as f:
-        json.dump(weights_list, f)
+        json.dump(weights_list, f, indent=2)
 
 # Define and compile the CNN model
 def create_cnn_model():
@@ -54,18 +75,7 @@ def main():
     model = create_cnn_model()
     print(model.summary())
     trained_model = train_and_evaluate_model(model, x_train, y_train, x_test, y_test)
-    weights = trained_model.get_weights()
-    print(f'/n/nWeights /n {weights}')
-    first_layer_weights = model.layers[0].get_weights()[0]
-    first_layer_biases  = model.layers[0].get_weights()[1]
-    second_layer_weights = model.layers[2].get_weights()[0]
-    second_layer_biases  = model.layers[2].get_weights()[1]
-    print(f'/n/nFirst Layer weights /n {first_layer_weights}')
-    print(f'/n/nFirst Layer biases /n {first_layer_biases}')
-    print(f'/n/nSecond Layer weights /n {second_layer_weights}')
-    print(f'/n/nSecond Layer biases /n {second_layer_biases}')
-    # quantized_weights = quantize_weights(weights)
-    save_weights_json(weights)
+    save_weights_json(trained_model)
 
 if __name__ == "__main__":
     main()
