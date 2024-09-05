@@ -1,15 +1,15 @@
 use model_layers::layers::{dense_layer, flatten_layer};
 use model_layers::{VecD1, VecD2, Weights};
-use MNIST_LIB;
+use mnist_lib;
 
 mod model_layers;
 
 fn main() {
     // Load quantized weights from JSON
-    let weights: Vec<Weights> = read_weights_from_json("../MNIST_WEIGHTS/weights.json");
+    let weights: Vec<Weights> = read_weights_from_json("../mnist_weights/weights.json");
 
     // Load MNIST dataset
-    let images = MNIST_LIB::load_mnist_dataset();
+    let images = mnist_lib::load_mnist_dataset();
     let img_count = images.len();
 
     let mut correct_count = 0;
@@ -29,7 +29,7 @@ fn main() {
             get_predicted_class(model)
         };
 
-        if image.label == MNIST_LIB::MnistDigit::from_usize(predicted_result) {
+        if image.label == mnist_lib::MnistDigit::from_usize(predicted_result) {
             correct_count += 1;
         } else {
             incorrect_count += 1;
