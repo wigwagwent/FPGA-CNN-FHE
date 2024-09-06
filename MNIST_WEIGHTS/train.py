@@ -64,6 +64,8 @@ def save_weights_json(model, filename='weights.json'):
     # Write the weights to a JSON file
     with open(filename, 'w') as f:
         json.dump(weights_list, f, indent=2)
+    print(f"Weights saved to {filename}")
+
 
 def save_intermediate_outputs(model, x_test, filename_prefix='intermediate_output'):
     # Use a sample input to initialize the model layers
@@ -111,9 +113,6 @@ def main():
 
     # Save weights to JSON
     save_weights_json(trained_model)
-
-    # Save intermediate outputs after the model has been trained and initialized
-    save_intermediate_outputs(trained_model, x_test)
 
 if __name__ == "__main__":
     main()

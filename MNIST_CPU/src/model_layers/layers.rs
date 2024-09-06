@@ -89,6 +89,8 @@ pub fn flatten_layer(outputs: Vec<VecD2>) -> VecD1 {
 
 #[cfg(test)]
 mod tests {
+    use crate::read_weights_from_json;
+
     use super::*;
     use serde_json::Value;
     use std::fs;
@@ -306,10 +308,10 @@ mod tests {
     #[test]
     fn test_softmax_layer_output_with_json() {
         // Load the flattened input from JSON (same as before)
-        let flatten_input: VecD1 = load_flatten_input_from_json("../MNIST_WEIGHTS/test_softmax/flatten_input.json");
+        let flatten_input: VecD1 = load_flatten_input_from_json("../mnist_weights/test_softmax/flatten_input.json");
 
         // Load the weights from JSON
-        let dense_weights = create_dense_weights_from_json("../MNIST_WEIGHTS/test_softmax/test_weights.json");
+        let dense_weights = create_dense_weights_from_json("../mnist_weights/test_softmax/test_weights.json");
 
         // Apply the dense layer
         let dense_output = dense_layer(flatten_input, vec![dense_weights], Activation::None);
@@ -318,9 +320,36 @@ mod tests {
         let softmax_output = softmax_activation(dense_output);
 
         // Load the expected softmax output from JSON
-        let expected_softmax_output = load_softmax_output_from_json("../MNIST_WEIGHTS/test_softmax/softmax_output.json");
+        let expected_softmax_output = load_softmax_output_from_json("../mnist_weights/test_softmax/softmax_output.json");
 
         // Check if the softmax output matches the expected output
         assert_eq!(softmax_output, expected_softmax_output, "Softmax layer output does not match expected output.");
+    }
+
+    #[test]
+    fn test_convolution_to_flatten_layer() {
+        let image_data: VecD2 = load_image_from_json("../mnist_weights/test_convolution_to_flatten/test_image.json");
+        let mut w: Vec<Weights> = read_weights_from_json("../mnist_weights/weights.json");
+
+            // Convolution Layer
+            let conv_output = convolution_layer(image_data.clone(), w.split_off(w.len() - 8), Activation::ReLU(0.0));
+            //save_to_file(format!("intermediate_output_rust_conv_{}.json", idx).as_str(), serde_json::to_string_pretty(&conv_output).expect("Failed to serialize convolution output").as_str());
+
+            // Flatten Layer
+            let flatten_output = flatten_layer(conv_output.clone());
+            //save_to_file(format!("intermediate_output_rust_flatten_{}.json", idx).as_str(), serde_json::to_string_pretty(&flatten_output).expect("Failed to serialize flatten output").as_str());
+
+            // Load the expected flatten output from JSON
+            let expected_flatten_output: VecD1 = load_flattened_output_from_json("../mnist_weights/test_convolution_to_flatten/output.json");
+
+            // Compare the flatten output with the expected output
+            for (actual, expected) in flatten_output.iter().zip(expected_flatten_output.iter()) {
+                assert!(
+                    (actual - expected).abs() < TOLERANCE,
+                    "Flatten output does not match expected output."
+                );
+            }
+            println!("Test passed: Flatten output matches expected output.");
+
     }
 }
