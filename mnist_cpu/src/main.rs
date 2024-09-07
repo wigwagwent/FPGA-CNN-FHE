@@ -127,12 +127,13 @@ impl Model {
         // Compute loss
         let loss = layers::cross_entropy_loss(&dense_output, &target);
 
-        // Backward pass
+        // Backpropagation
+        let clip_value: Quantized = 1.0;
         let (dense_gradients, flatten_grad) =
-            layers::backprop_dense(&flatten_output, &dense_output, &target, &self.dense_weights);
+            layers::backprop_dense(&flatten_output, &dense_output, &target, &self.dense_weights, clip_value);
         let conv_grad = layers::unflatten_gradient(&flatten_grad, &conv_output);
         let conv_gradients =
-            layers::backprop_conv(&input, &conv_output, &conv_grad, &self.conv_weights);
+            layers::backprop_conv(&input, &conv_output, &conv_grad, &self.conv_weights, clip_value);
 
         // Update weights
         for (weight, gradient) in self.dense_weights.iter_mut().zip(dense_gradients.iter()) {
@@ -150,7 +151,7 @@ fn get_predicted_class(probabilities: VecD1) -> usize {
     probabilities
         .iter()
         .enumerate()
-        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Less))
         .map(|(index, _)| index)
         .unwrap()
 }

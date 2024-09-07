@@ -111,6 +111,7 @@ pub fn backprop_dense(
     output: &VecD1,
     target: &VecD1,
     weights: &Vec<Weights>,
+    clip_value: Quantized, // Add a clip_value parameter
 ) -> (Vec<Weights>, VecD1) {
     let mut gradients = Vec::new();
     let mut input_grad = vec![0.0; input.len()];
@@ -120,12 +121,12 @@ pub fn backprop_dense(
             let output_grad = output[i] - target[i];
             let mut weight_grad = vec![0.0; w.len()];
             for (j, &inp) in input.iter().enumerate() {
-                weight_grad[j] = output_grad * inp;
-                input_grad[j] += output_grad * w[j];
+                weight_grad[j] = (output_grad * inp).clamp(-clip_value, clip_value); // Clip the gradient
+                input_grad[j] += (output_grad * w[j]).clamp(-clip_value, clip_value); // Clip input gradient
             }
             gradients.push(Weights::Dense {
                 weights: weight_grad,
-                bias: output_grad,
+                bias: output_grad.clamp(-clip_value, clip_value), // Clip the bias gradient
             });
         }
     }
@@ -138,6 +139,7 @@ pub fn backprop_conv(
     output: &Vec<VecD2>,
     output_grad: &Vec<VecD2>,
     weights: &Vec<Weights>,
+    clip_value: Quantized, // Add a clip_value parameter
 ) -> Vec<Weights> {
     let mut gradients = Vec::new();
 
@@ -153,7 +155,7 @@ pub fn backprop_conv(
 
                     for ky in 0..kernel.len() {
                         for kx in 0..kernel[0].len() {
-                            kernel_grad[ky][kx] += input[y + ky][x + kx] * grad;
+                            kernel_grad[ky][kx] += (input[y + ky][x + kx] * grad).clamp(-clip_value, clip_value); // Clip kernel gradient
                         }
                     }
                 }
@@ -161,7 +163,7 @@ pub fn backprop_conv(
 
             gradients.push(Weights::Convolution {
                 kernel: kernel_grad,
-                bias: bias_grad,
+                bias: bias_grad.clamp(-clip_value, clip_value), // Clip bias gradient
             });
         }
     }
