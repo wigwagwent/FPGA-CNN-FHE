@@ -1,20 +1,13 @@
 // use std::fs::File;
 // use std::io::Read;
 
-
-fn read_mnist_image_file(_file_path: &str) -> Vec<MnistImageData> {
-    // Read Image data
-    //let mut image_file = File::open(file_path).expect(format!("{} file not found", file_path).as_str());
-    //let mut image_buffer = Vec::new();
-    //image_file.read_to_end(&mut image_buffer).unwrap();
-    let image_buffer = include_bytes!("../data/t10k-images.idx3-ubyte").to_vec();
-
+fn read_mnist_image_file(buffer: Vec<u8>) -> Vec<MnistImageData> {
     // Extract Image data
-    assert!(image_buffer[0] == 0 && image_buffer[1] == 0 && image_buffer[2] == 8 && image_buffer[3] == 3); // Magic number
+    assert!(buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 8 && buffer[3] == 3); // Magic number
 
-    let num_images = u32::from_be_bytes(image_buffer[4..8].try_into().unwrap()) as usize;
-    let num_rows = u32::from_be_bytes(image_buffer[8..12].try_into().unwrap()) as usize;
-    let num_cols = u32::from_be_bytes(image_buffer[12..16].try_into().unwrap()) as usize;
+    let num_images = u32::from_be_bytes(buffer[4..8].try_into().unwrap()) as usize;
+    let num_rows = u32::from_be_bytes(buffer[8..12].try_into().unwrap()) as usize;
+    let num_cols = u32::from_be_bytes(buffer[12..16].try_into().unwrap()) as usize;
 
     assert!(num_rows == 28 && num_cols == 28); // Image dimensions
 
@@ -26,35 +19,27 @@ fn read_mnist_image_file(_file_path: &str) -> Vec<MnistImageData> {
         for _ in 0..28 {
             let mut row = Vec::new();
             for _ in 0..28 {
-                row.push(image_buffer[offset]);
+                row.push(buffer[offset]);
                 offset += 1;
             }
             image_data.push(row);
         }
         mnist_images.push(image_data);
-
     }
 
     mnist_images
 }
 
-fn read_mnist_label_file(_file_path: &str) -> Vec<MnistDigit> {
-    // Read Label data
-    // let mut label_file = File::open(file_path).expect(format!("{} file not found", file_path).as_str());
-    // let mut label_buffer = Vec::new();
-    // label_file.read_to_end(&mut label_buffer).unwrap();
-    let label_buffer = include_bytes!("../data/t10k-labels.idx1-ubyte").to_vec();
+fn read_mnist_label_file(buffer: Vec<u8>) -> Vec<MnistDigit> {
+    assert!(buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 8 && buffer[3] == 1); // Magic number
 
-    // Extract Label data
-    assert!(label_buffer[0] == 0 && label_buffer[1] == 0 && label_buffer[2] == 8 && label_buffer[3] == 1); // Magic number
-
-    let num_labels = u32::from_be_bytes(label_buffer[4..8].try_into().unwrap()) as usize;
+    let num_labels = u32::from_be_bytes(buffer[4..8].try_into().unwrap()) as usize;
 
     let mut offset = 8;
     let mut mnist_labels: Vec<MnistDigit> = Vec::new();
 
     for _ in 0..num_labels {
-        let label = MnistDigit::from_usize(label_buffer[offset] as usize);
+        let label = MnistDigit::from_usize(buffer[offset] as usize);
         mnist_labels.push(label);
         offset += 1;
     }
@@ -62,16 +47,37 @@ fn read_mnist_label_file(_file_path: &str) -> Vec<MnistDigit> {
     mnist_labels
 }
 
+pub fn load_mnist_dataset(dataset: MnistDataset) -> Vec<MnistImage> {
+    let (image_buffer, label_buffer) = match dataset {
+        MnistDataset::Train => (
+            include_bytes!("../data/train-images.idx3-ubyte").to_vec(),
+            include_bytes!("../data/train-labels.idx1-ubyte").to_vec(),
+        ),
+        MnistDataset::Validate => (
+            include_bytes!("../data/t10k-images.idx3-ubyte").to_vec(),
+            include_bytes!("../data/t10k-labels.idx1-ubyte").to_vec(),
+        ),
+    };
 
-pub fn load_mnist_dataset() -> Vec<MnistImage> {
-    // Read Image and Label data
-    let image_data = read_mnist_image_file("data/t10k-images.idx3-ubyte");
-    let label_data = read_mnist_label_file("data/t10k-labels.idx1-ubyte");
+    let image_data = read_mnist_image_file(image_buffer);
+    let label_data = read_mnist_label_file(label_buffer);
 
     assert!(image_data.len() == label_data.len()); // Check if Image and Label data have same number of elements
 
     // Combine Image and Label data
-    image_data.iter().zip(label_data.iter()).map(|(image, label)| MnistImage { data: image.clone(), label: *label }).collect()
+    image_data
+        .iter()
+        .zip(label_data.iter())
+        .map(|(image, label)| MnistImage {
+            data: image.clone(),
+            label: *label,
+        })
+        .collect()
+}
+
+pub enum MnistDataset {
+    Train,
+    Validate,
 }
 
 pub type MnistImageData = Vec<Vec<u8>>;
@@ -128,44 +134,79 @@ pub struct MnistImage {
     pub label: MnistDigit,
 }
 
-
-
-
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
+    use image::ImageBuffer;
     use std::fs::File;
-use image::ImageBuffer;
+    use std::io::Write;
 
     use super::*;
 
     #[test]
-    fn generate_and_save_image_0_and_label() {
-        let image_data = read_mnist_image_file("data/t10k-images.idx3-ubyte");
-        let label_data = read_mnist_label_file("data/t10k-labels.idx1-ubyte");
+    fn train_image_0_and_label() {
+        let data = load_mnist_dataset(MnistDataset::Train);
 
-        let image_0 = image_data[0].clone();
-        let label_0 = label_data[0];
+        let image_0 = data[0].data.clone();
+        let label_0 = data[0].label;
 
-        let image_buffer: ImageBuffer<image::Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(28, 28, image_0.iter().flatten().cloned().collect()).unwrap();
-        image_buffer.save("tests/image_0.jpg").unwrap();
+        let image_buffer: ImageBuffer<image::Luma<u8>, Vec<u8>> =
+            ImageBuffer::from_raw(28, 28, image_0.iter().flatten().cloned().collect()).unwrap();
+        image_buffer.save("tests/train_image_0.jpg").unwrap();
 
-        let mut label_file = File::create("tests/label_0.txt").unwrap();
-        label_file.write_all(label_0.as_usize().to_string().as_bytes()).unwrap();
+        let mut label_file = File::create("tests/train_label_0.txt").unwrap();
+        label_file
+            .write_all(label_0.as_usize().to_string().as_bytes())
+            .unwrap();
     }
 
     #[test]
-    fn generate_and_save_image_100_and_label() {
-        let image_data = read_mnist_image_file("data/t10k-images.idx3-ubyte");
-        let label_data = read_mnist_label_file("data/t10k-labels.idx1-ubyte");
+    fn train_image_100_and_label() {
+        let data = load_mnist_dataset(MnistDataset::Train);
 
-        let image_100 = image_data[100].clone();
-        let label_100 = label_data[100];
+        let image_100 = data[100].data.clone();
+        let label_100 = data[100].label;
 
-        let image_buffer: ImageBuffer<image::Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(28, 28, image_100.iter().flatten().cloned().collect()).unwrap();
-        image_buffer.save("tests/image_100.jpg").unwrap();
+        let image_buffer: ImageBuffer<image::Luma<u8>, Vec<u8>> =
+            ImageBuffer::from_raw(28, 28, image_100.iter().flatten().cloned().collect()).unwrap();
+        image_buffer.save("tests/train_image_100.jpg").unwrap();
 
-        let mut label_file = File::create("tests/label_100.txt").unwrap();
-        label_file.write_all(label_100.as_usize().to_string().as_bytes()).unwrap();
+        let mut label_file = File::create("tests/train_label_100.txt").unwrap();
+        label_file
+            .write_all(label_100.as_usize().to_string().as_bytes())
+            .unwrap();
+    }
+
+    #[test]
+    fn validate_image_0_and_label() {
+        let data = load_mnist_dataset(MnistDataset::Validate);
+
+        let image_0 = data[0].data.clone();
+        let label_0 = data[0].label;
+
+        let image_buffer: ImageBuffer<image::Luma<u8>, Vec<u8>> =
+            ImageBuffer::from_raw(28, 28, image_0.iter().flatten().cloned().collect()).unwrap();
+        image_buffer.save("tests/validate_image_0.jpg").unwrap();
+
+        let mut label_file = File::create("tests/validate_label_0.txt").unwrap();
+        label_file
+            .write_all(label_0.as_usize().to_string().as_bytes())
+            .unwrap();
+    }
+
+    #[test]
+    fn validate_image_100_and_label() {
+        let data = load_mnist_dataset(MnistDataset::Validate);
+
+        let image_100 = data[100].data.clone();
+        let label_100 = data[100].label;
+
+        let image_buffer: ImageBuffer<image::Luma<u8>, Vec<u8>> =
+            ImageBuffer::from_raw(28, 28, image_100.iter().flatten().cloned().collect()).unwrap();
+        image_buffer.save("tests/validate_image_100.jpg").unwrap();
+
+        let mut label_file = File::create("tests/validate_label_100.txt").unwrap();
+        label_file
+            .write_all(label_100.as_usize().to_string().as_bytes())
+            .unwrap();
     }
 }

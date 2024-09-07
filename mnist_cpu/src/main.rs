@@ -1,11 +1,14 @@
-use mnist_lib::{self, MnistImage};
+use mnist_lib::{self, MnistDataset, MnistImage};
 use model_layers::layers::{self, dense_layer, flatten_layer};
 use model_layers::{Activation, Quantized, SGDOptimizer, VecD1, VecD2, Weights};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod model_layers;
 
 fn main() {
-    let images: Vec<MnistImage> = mnist_lib::load_mnist_dataset();
+    let val_images: Vec<MnistImage> = mnist_lib::load_mnist_dataset(MnistDataset::Validate);
+    let train_images: Vec<MnistImage> = mnist_lib::load_mnist_dataset(MnistDataset::Train);
 
     let mut model = Model::random_weights();
     let optimizer = SGDOptimizer::new(0.01);
@@ -13,7 +16,7 @@ fn main() {
     // Training loop
     for epoch in 0..20 {
         let mut total_loss = 0.0;
-        for (_idx, image) in images.iter().enumerate() {
+        for (_idx, image) in train_images.iter().enumerate() {
             let image_data: VecD2 = image
                 .data
                 .iter()
@@ -29,51 +32,12 @@ fn main() {
         println!(
             "Epoch {} complete. Average loss: {}",
             epoch,
-            total_loss / images.len() as f32
+            total_loss / train_images.len() as f32
         );
-        let mut correct_count = 0;
-        for image in images.iter() {
-            let image_data: VecD2 = image
-                .data
-                .iter()
-                .map(|row| row.iter().map(|&pixel| pixel as f32).collect())
-                .collect();
 
-            let output = model.forward(image_data);
-            let predicted_class = get_predicted_class(output);
-
-            if image.label == mnist_lib::MnistDigit::from_usize(predicted_class) {
-                correct_count += 1;
-            }
-        }
-
-        println!(
-            "Accuracy after epoch: {:.2}%",
-            correct_count as f32 / images.len() as f32 * 100.0
-        );
+        // Evaluate the model after each epoch
+        model.validate(&val_images);
     }
-
-    // Evaluate the model after training
-    let mut correct_count = 0;
-    for image in images.iter() {
-        let image_data: VecD2 = image
-            .data
-            .iter()
-            .map(|row| row.iter().map(|&pixel| pixel as f32).collect())
-            .collect();
-
-        let output = model.forward(image_data);
-        let predicted_class = get_predicted_class(output);
-
-        if image.label == mnist_lib::MnistDigit::from_usize(predicted_class) {
-            correct_count += 1;
-        }
-    }
-
-    println!(
-        "Accuracy after training: {:.2}%",
-        correct_count as f32 / images.len() as f32 * 100.0
-    );
 }
 
 // Structure to represent the machine learing model
@@ -129,11 +93,21 @@ impl Model {
 
         // Backpropagation
         let clip_value: Quantized = 1.0;
-        let (dense_gradients, flatten_grad) =
-            layers::backprop_dense(&flatten_output, &dense_output, &target, &self.dense_weights, clip_value);
+        let (dense_gradients, flatten_grad) = layers::backprop_dense(
+            &flatten_output,
+            &dense_output,
+            &target,
+            &self.dense_weights,
+            clip_value,
+        );
         let conv_grad = layers::unflatten_gradient(&flatten_grad, &conv_output);
-        let conv_gradients =
-            layers::backprop_conv(&input, &conv_output, &conv_grad, &self.conv_weights, clip_value);
+        let conv_gradients = layers::backprop_conv(
+            &input,
+            &conv_output,
+            &conv_grad,
+            &self.conv_weights,
+            clip_value,
+        );
 
         // Update weights
         for (weight, gradient) in self.dense_weights.iter_mut().zip(dense_gradients.iter()) {
@@ -144,6 +118,32 @@ impl Model {
         }
 
         loss
+    }
+
+    fn validate(&self, images: &Vec<MnistImage>) -> usize {
+        let correct_count = AtomicUsize::new(0);
+        images.par_iter().for_each(|image| {
+            let image_data: VecD2 = image
+                .data
+                .iter()
+                .map(|row| row.iter().map(|&pixel| pixel as f32).collect())
+                .collect();
+
+            let output = self.forward(image_data);
+            let predicted_class = get_predicted_class(output);
+
+            if image.label == mnist_lib::MnistDigit::from_usize(predicted_class) {
+                correct_count.fetch_add(1, Ordering::Relaxed);
+            }
+        });
+
+        let correct_count = correct_count.load(Ordering::Relaxed);
+
+        println!(
+            "Accuracy after training: {:.2}%",
+            correct_count as f32 / images.len() as f32 * 100.0
+        );
+        correct_count
     }
 }
 
