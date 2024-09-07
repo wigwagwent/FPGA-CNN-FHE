@@ -1,3 +1,4 @@
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 //use std::ops::{Add, Mul, Sub};
 
@@ -13,6 +14,24 @@ pub type VecD2 = Vec<Vec<Quantized>>; // 2D vector for convolutional layer
 pub enum Weights {
     Convolution { kernel: VecD2, bias: Quantized },
     Dense { weights: VecD1, bias: Quantized },
+}
+
+impl Weights {
+    pub fn rand_convolution(kernel_size: usize) -> Self {
+        let mut rng = rand::thread_rng();
+        Weights::Convolution {
+            kernel: vec![vec![rng.gen(); kernel_size]; kernel_size],
+            bias: rng.gen(),
+        }
+    }
+
+    pub fn rand_dense(inputs: usize) -> Self {
+        let mut rng = rand::thread_rng();
+        Weights::Dense {
+            weights: vec![rng.gen(); inputs],
+            bias: rng.gen(),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]

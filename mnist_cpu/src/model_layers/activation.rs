@@ -10,14 +10,6 @@ pub fn relu_activation(mut input: VecD2, min: Quantized) -> VecD2 {
 }
 
 pub fn softmax_activation(scores: VecD1) -> VecD1 {
-    // Debug checks
-    if scores.is_empty() {
-        panic!("Scores vector is empty");
-    }
-    if scores.iter().any(|&score| score.is_nan()) {
-        panic!("Scores vector contains NaN values");
-    }
-
     // Rest of the function remains the same
     let max_score = scores
         .iter()

@@ -1,7 +1,6 @@
 use crate::model_layers::activation::relu_activation;
 use crate::model_layers::activation::softmax_activation;
 
-use super::SGDOptimizer;
 use super::{Activation, Quantized, VecD1, VecD2, Weights};
 
 pub fn convolution_layer(
@@ -56,10 +55,10 @@ pub fn dense_layer(inputs: VecD1, weights: Vec<Weights>, activation: Activation)
     let mut output: Vec<Quantized> = Vec::new();
     for i in 0..weights.len() {
         let result = dense(inputs.clone(), weights[i].clone());
-        println!("Dense output {}: {:?}", i, result);
+        //println!("Dense output {}: {:?}", i, result);
         output.push(result);
     }
-    println!("Final dense layer output: {:?}", output);
+    //println!("Final dense layer output: {:?}", output);
     match activation {
         Activation::Softmax => softmax_activation(output),
         _ => output,
@@ -72,9 +71,9 @@ fn dense(inputs: VecD1, weights: Weights) -> Quantized {
         _ => panic!("Invalid weights for dense layer"),
     };
 
-    println!("Inputs: {:?}", inputs);
-    println!("Weights: {:?}", weights);
-    println!("Bias: {:?}", bias);
+    //println!("Inputs: {:?}", inputs);
+    //println!("Weights: {:?}", weights);
+    //println!("Bias: {:?}", bias);
 
     // Ensure that the number of inputs matches the number of weights
     assert_eq!(
@@ -88,10 +87,10 @@ fn dense(inputs: VecD1, weights: Weights) -> Quantized {
     for (input, weight) in inputs.iter().zip(weights.iter()) {
         sum += input * weight;
         if sum.is_nan() {
-            println!("NaN detected! Input: {}, Weight: {}", input, weight);
+            //println!("NaN detected! Input: {}, Weight: {}", input, weight);
         }
     }
-    println!("Dense output: {}", sum);
+    //println!("Dense output: {}", sum);
     sum
 }
 
@@ -198,11 +197,17 @@ pub fn unflatten_gradient(flatten_grad: &VecD1, conv_output: &Vec<VecD2>) -> Vec
 
 #[cfg(test)]
 mod tests {
-    use crate::read_weights_from_json;
-
     use super::*;
     use serde_json::Value;
     use std::fs;
+
+    fn read_weights_from_json(filename: &str) -> Vec<Weights> {
+        let json_str =
+            std::fs::read_to_string(filename).expect("Failed to read weights from JSON file");
+        let weights: Vec<Weights> =
+            serde_json::from_str(&json_str).expect("Failed to parse weights from JSON");
+        weights
+    }
 
     // Helper function to load an image (5x5 or 28x28) from a JSON file
     fn load_image_from_json(file_path: &str) -> VecD2 {
