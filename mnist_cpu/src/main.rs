@@ -13,6 +13,7 @@ fn main() {
 
     let mut model = Model::random_weights();
     let mut optimizer = SGDOptimizer::new(0.01);
+    optimizer.initialize_velocities(&model.dense_weights, &model.conv_weights);
 
     // Training loop
     for epoch in 0..20 {
