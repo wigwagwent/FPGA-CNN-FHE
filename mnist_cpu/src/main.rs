@@ -93,7 +93,7 @@ impl Model {
         let loss = layers::cross_entropy_loss(&dense_output, &target);
 
         // Backpropagation
-        let clip_value: Quantized = 3.16;
+        let clip_value: Quantized = 2.5;
         let (dense_gradients, flatten_grad) = layers::backprop_dense(
             &flatten_output,
             &dense_output,
