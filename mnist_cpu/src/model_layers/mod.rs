@@ -43,64 +43,102 @@ pub enum Activation {
 
 pub struct SGDOptimizer {
     learning_rate: Quantized,
+    momentum: Quantized,          // Momentum factor
+    dense_velocities: Vec<Weights>,  // Velocities for dense layers
+    conv_velocities: Vec<Weights>,   // Velocities for convolution layers
 }
 
 impl SGDOptimizer {
     pub fn new(learning_rate: Quantized) -> Self {
-        SGDOptimizer { learning_rate }
+        SGDOptimizer {
+            learning_rate,
+            momentum: 0.9,  // Default momentum value
+            dense_velocities: Vec::new(),
+            conv_velocities: Vec::new(),
+        }
     }
 
-    pub fn update(&self, weights: &mut Weights, gradients: &Weights) {
+    // Initialize the velocities for both dense and convolutional weights
+    pub fn initialize_velocities(&mut self, dense_weights: &Vec<Weights>, conv_weights: &Vec<Weights>) {
+        self.dense_velocities = dense_weights
+            .iter()
+            .map(|w| match w {
+                Weights::Dense { weights, bias: _ } => Weights::Dense {
+                    weights: vec![0.0; weights.len()],
+                    bias: 0.0,
+                },
+                _ => panic!("Unexpected weight type for dense layer"),
+            })
+            .collect();
+
+        self.conv_velocities = conv_weights
+            .iter()
+            .map(|w| match w {
+                Weights::Convolution { kernel, bias: _ } => Weights::Convolution {
+                    kernel: vec![vec![0.0; kernel[0].len()]; kernel.len()],
+                    bias: 0.0,
+                },
+                _ => panic!("Unexpected weight type for convolution layer"),
+            })
+            .collect();
+    }
+
+    // Update the weights using momentum and the gradients
+    pub fn update(&mut self, weights: &mut Weights, gradients: &Weights) {
         match (weights, gradients) {
             (
                 Weights::Convolution { kernel, bias },
-                Weights::Convolution {
-                    kernel: grad_kernel,
-                    bias: grad_bias,
-                },
+                Weights::Convolution { kernel: grad_kernel, bias: grad_bias },
             ) => {
-                for (k, gk) in kernel.iter_mut().zip(grad_kernel.iter()) {
-                    for (w, gw) in k.iter_mut().zip(gk.iter()) {
-                        *w -= self.learning_rate * gw;
-                    }
+                // Ensure velocities are initialized
+                if self.conv_velocities.is_empty() {
+                    panic!("Conv velocities not initialized.");
                 }
-                *bias -= self.learning_rate * grad_bias;
+
+                // Get the corresponding velocity for this weight
+                let velocity = self.conv_velocities.iter_mut().find(|v| matches!(v, Weights::Convolution { .. })).unwrap();
+
+                match velocity {
+                    Weights::Convolution { kernel: vel_kernel, bias: vel_bias } => {
+                        // Update the velocities and weights for convolutional layers
+                        for ((v_k, g_k), w_k) in vel_kernel.iter_mut().zip(grad_kernel.iter()).zip(kernel.iter_mut()) {
+                            for ((v, g), w) in v_k.iter_mut().zip(g_k.iter()).zip(w_k.iter_mut()) {
+                                *v = self.momentum * (*v) + (1.0 - self.momentum) * g;
+                                *w -= self.learning_rate * (*v);
+                            }
+                        }
+                        *vel_bias = self.momentum * (*vel_bias) + (1.0 - self.momentum) * grad_bias;
+                        *bias -= self.learning_rate * (*vel_bias);
+                    },
+                    _ => panic!("Unexpected velocity type for convolution layer"),
+                }
             }
             (
                 Weights::Dense { weights, bias },
-                Weights::Dense {
-                    weights: grad_weights,
-                    bias: grad_bias,
-                },
+                Weights::Dense { weights: grad_weights, bias: grad_bias },
             ) => {
-                for (w, gw) in weights.iter_mut().zip(grad_weights.iter()) {
-                    *w -= self.learning_rate * gw;
+                // Ensure velocities are initialized
+                if self.dense_velocities.is_empty() {
+                    panic!("Dense velocities not initialized.");
                 }
-                *bias -= self.learning_rate * grad_bias;
+
+                // Get the corresponding velocity for this weight
+                let velocity = self.dense_velocities.iter_mut().find(|v| matches!(v, Weights::Dense { .. })).unwrap();
+
+                match velocity {
+                    Weights::Dense { weights: vel_weights, bias: vel_bias } => {
+                        // Update the velocities and weights for dense layers
+                        for ((v_w, g_w), w_w) in vel_weights.iter_mut().zip(grad_weights.iter()).zip(weights.iter_mut()) {
+                            *v_w = self.momentum * (*v_w) + (1.0 - self.momentum) * g_w;
+                            *w_w -= self.learning_rate * (*v_w);
+                        }
+                        *vel_bias = self.momentum * (*vel_bias) + (1.0 - self.momentum) * grad_bias;
+                        *bias -= self.learning_rate * (*vel_bias);
+                    },
+                    _ => panic!("Unexpected velocity type for dense layer"),
+                }
             }
             _ => panic!("Mismatched weight types"),
         }
     }
 }
-
-// // Implement basic arithmetic operations for Quantized type
-// impl Add for Quantized {
-//     type Output = Self;
-//     fn add(self, other: Self) -> Self {
-//         self + other
-//     }
-// }
-
-// impl Sub for Quantized {
-//     type Output = Self;
-//     fn sub(self, other: Self) -> Self {
-//         self - other
-//     }
-// }
-
-// impl Mul for Quantized {
-//     type Output = Self;
-//     fn mul(self, other: Self) -> Self {
-//         self * other
-//     }
-// }

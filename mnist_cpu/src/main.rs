@@ -12,7 +12,7 @@ fn main() {
     let train_images: Vec<MnistImage> = mnist_lib::load_mnist_dataset(MnistDataset::Train);
 
     let mut model = Model::random_weights();
-    let optimizer = SGDOptimizer::new(0.01);
+    let mut optimizer = SGDOptimizer::new(0.01);
 
     // Training loop
     for epoch in 0..20 {
@@ -29,7 +29,7 @@ fn main() {
             let mut target = vec![0.0; 10];
             target[image.label.as_usize()] = 1.0;
 
-            let loss = model.train(image_data, target, &optimizer);
+            let loss = model.train(image_data, target, &mut optimizer);
             total_loss += loss;
         }
 
@@ -82,7 +82,7 @@ impl Model {
         )
     }
 
-    pub fn train(&mut self, input: VecD2, target: VecD1, optimizer: &SGDOptimizer) -> Quantized {
+    pub fn train(&mut self, input: VecD2, target: VecD1, optimizer: &mut SGDOptimizer) -> Quantized {
         // Forward pass
         let conv_output = layers::convolution_layer_par(
             input.clone(),
