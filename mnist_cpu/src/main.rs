@@ -37,6 +37,7 @@ fn main() {
 
         // Evaluate the model after each epoch
         model.validate(&val_images);
+        model.validate(&train_images);
     }
 }
 
@@ -92,7 +93,7 @@ impl Model {
         let loss = layers::cross_entropy_loss(&dense_output, &target);
 
         // Backpropagation
-        let clip_value: Quantized = 1.0;
+        let clip_value: Quantized = 3.16;
         let (dense_gradients, flatten_grad) = layers::backprop_dense(
             &flatten_output,
             &dense_output,

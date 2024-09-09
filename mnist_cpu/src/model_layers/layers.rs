@@ -111,28 +111,65 @@ pub fn backprop_dense(
     output: &VecD1,
     target: &VecD1,
     weights: &Vec<Weights>,
-    clip_value: Quantized, // Add a clip_value parameter
+    clip_value: Quantized, // Add a clip_value parameter for norm clipping
 ) -> (Vec<Weights>, VecD1) {
     let mut gradients = Vec::new();
     let mut input_grad = vec![0.0; input.len()];
+    let mut total_norm: Quantized = 0.0; // To calculate total gradient norm
 
+    // Calculate gradients and accumulate the L2 norm
     for (i, weight) in weights.iter().enumerate() {
         if let Weights::Dense { weights: w, bias } = weight {
             let output_grad = output[i] - target[i];
             let mut weight_grad = vec![0.0; w.len()];
+
             for (j, &inp) in input.iter().enumerate() {
-                weight_grad[j] = (output_grad * inp).clamp(-clip_value, clip_value); // Clip the gradient
-                input_grad[j] += (output_grad * w[j]).clamp(-clip_value, clip_value); // Clip input gradient
+                let grad = output_grad * inp;
+                weight_grad[j] = grad;
+
+                // Accumulate the square of the gradient for norm calculation
+                total_norm += grad * grad;
+
+                // Accumulate input gradients as well
+                input_grad[j] += output_grad * w[j];
             }
+
+            // Add bias gradient to the total norm
+            total_norm += output_grad * output_grad;
+
             gradients.push(Weights::Dense {
                 weights: weight_grad,
-                bias: output_grad.clamp(-clip_value, clip_value), // Clip the bias gradient
+                bias: output_grad,
             });
+        }
+    }
+
+    // Calculate the norm (L2 norm)
+    total_norm = total_norm.sqrt();
+
+    // If the total norm exceeds the clip_value, scale all gradients
+    if total_norm > clip_value {
+        let scaling_factor = clip_value / total_norm;
+
+        // Scale all gradients to clip their norm
+        for grad in &mut gradients {
+            if let Weights::Dense { weights: weight_grad, bias } = grad {
+                for weight in weight_grad.iter_mut() {
+                    *weight *= scaling_factor; // Scale weight gradients
+                }
+                *bias *= scaling_factor; // Scale bias gradient
+            }
+        }
+
+        // Also scale the input gradients
+        for input_grad_val in input_grad.iter_mut() {
+            *input_grad_val *= scaling_factor;
         }
     }
 
     (gradients, input_grad)
 }
+
 
 pub fn backprop_conv(
     input: &VecD2,
