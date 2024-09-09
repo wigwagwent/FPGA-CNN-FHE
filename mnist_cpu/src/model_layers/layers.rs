@@ -1,3 +1,6 @@
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
+
 use crate::model_layers::activation::relu_activation;
 use crate::model_layers::activation::softmax_activation;
 
@@ -13,6 +16,17 @@ pub fn convolution_layer(
         output.push(convolution(&input, &weights[i], activation));
     }
     output
+}
+
+pub fn convolution_layer_par(
+    input: VecD2,
+    weights: Vec<Weights>,
+    activation: Activation,
+) -> Vec<VecD2> {
+    weights
+        .par_iter()
+        .map(|weight| convolution(&input, weight, activation))
+        .collect()
 }
 
 fn convolution(input: &VecD2, weights: &Weights, activation: Activation) -> VecD2 {
@@ -59,6 +73,22 @@ pub fn dense_layer(inputs: VecD1, weights: Vec<Weights>, activation: Activation)
         output.push(result);
     }
     //println!("Final dense layer output: {:?}", output);
+    match activation {
+        Activation::Softmax => softmax_activation(output),
+        _ => output,
+    }
+}
+
+pub fn dense_layer_par(
+    inputs: VecD1,
+    weights: Vec<Weights>,
+    activation: Activation,
+) -> Vec<Quantized> {
+    let output: Vec<Quantized> = weights
+        .par_iter()
+        .map(|weight| dense(inputs.to_vec(), weight.clone()))
+        .collect();
+
     match activation {
         Activation::Softmax => softmax_activation(output),
         _ => output,
@@ -153,7 +183,11 @@ pub fn backprop_dense(
 
         // Scale all gradients to clip their norm
         for grad in &mut gradients {
-            if let Weights::Dense { weights: weight_grad, bias } = grad {
+            if let Weights::Dense {
+                weights: weight_grad,
+                bias,
+            } = grad
+            {
                 for weight in weight_grad.iter_mut() {
                     *weight *= scaling_factor; // Scale weight gradients
                 }
@@ -169,7 +203,6 @@ pub fn backprop_dense(
 
     (gradients, input_grad)
 }
-
 
 pub fn backprop_conv(
     input: &VecD2,
@@ -192,7 +225,9 @@ pub fn backprop_conv(
 
                     for ky in 0..kernel.len() {
                         for kx in 0..kernel[0].len() {
-                            kernel_grad[ky][kx] += (input[y + ky][x + kx] * grad).clamp(-clip_value, clip_value); // Clip kernel gradient
+                            kernel_grad[ky][kx] +=
+                                (input[y + ky][x + kx] * grad).clamp(-clip_value, clip_value);
+                            // Clip kernel gradient
                         }
                     }
                 }

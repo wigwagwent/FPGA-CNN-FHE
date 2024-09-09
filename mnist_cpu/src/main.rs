@@ -1,8 +1,9 @@
 use mnist_lib::{self, MnistDataset, MnistImage};
-use model_layers::layers::{self, dense_layer, flatten_layer};
+use model_layers::layers;
 use model_layers::{Activation, Quantized, SGDOptimizer, VecD1, VecD2, Weights};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Instant;
 
 mod model_layers;
 
@@ -15,7 +16,9 @@ fn main() {
 
     // Training loop
     for epoch in 0..20 {
+        let epoch_start = Instant::now();
         let mut total_loss = 0.0;
+
         for (_idx, image) in train_images.iter().enumerate() {
             let image_data: VecD2 = image
                 .data
@@ -29,10 +32,14 @@ fn main() {
             let loss = model.train(image_data, target, &optimizer);
             total_loss += loss;
         }
+
+        let epoch_duration = epoch_start.elapsed();
+
         println!(
-            "Epoch {} complete. Average loss: {}",
+            "Epoch {} complete. Average loss: {:.6}. Duration: {:.2?}",
             epoch,
-            total_loss / train_images.len() as f32
+            total_loss / train_images.len() as f32,
+            epoch_duration
         );
 
         // Evaluate the model after each epoch
@@ -77,13 +84,13 @@ impl Model {
 
     pub fn train(&mut self, input: VecD2, target: VecD1, optimizer: &SGDOptimizer) -> Quantized {
         // Forward pass
-        let conv_output = layers::convolution_layer(
+        let conv_output = layers::convolution_layer_par(
             input.clone(),
             self.conv_weights.clone(),
             Activation::ReLU(0.0),
         );
-        let flatten_output = flatten_layer(conv_output.clone());
-        let dense_output = dense_layer(
+        let flatten_output = layers::flatten_layer(conv_output.clone());
+        let dense_output = layers::dense_layer_par(
             flatten_output.clone(),
             self.dense_weights.clone(),
             Activation::Softmax,
