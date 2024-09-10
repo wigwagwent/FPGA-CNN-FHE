@@ -1,6 +1,7 @@
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 
+use crate::model_layers::activation::quadratic_activation;
 use crate::model_layers::activation::relu_activation;
 use crate::model_layers::activation::softmax_activation;
 
@@ -61,6 +62,7 @@ fn convolution(input: &VecD2, weights: &Weights, activation: Activation) -> VecD
 
     match activation {
         Activation::ReLU(min) => relu_activation(output, min),
+        Activation::Quadratic => quadratic_activation(output),
         _ => output,
     }
 }

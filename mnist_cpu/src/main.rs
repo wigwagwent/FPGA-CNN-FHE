@@ -74,7 +74,7 @@ impl Model {
 
     pub fn forward(&self, input: VecD2) -> VecD1 {
         let conv_output =
-            layers::convolution_layer(input, self.conv_weights.clone(), Activation::ReLU(0.0));
+            layers::convolution_layer(input, self.conv_weights.clone(), Activation::Quadratic);
         let flatten_output = layers::flatten_layer(conv_output);
         layers::dense_layer(
             flatten_output,
@@ -83,12 +83,17 @@ impl Model {
         )
     }
 
-    pub fn train(&mut self, input: VecD2, target: VecD1, optimizer: &mut SGDOptimizer) -> Quantized {
+    pub fn train(
+        &mut self,
+        input: VecD2,
+        target: VecD1,
+        optimizer: &mut SGDOptimizer,
+    ) -> Quantized {
         // Forward pass
         let conv_output = layers::convolution_layer_par(
             input.clone(),
             self.conv_weights.clone(),
-            Activation::ReLU(0.0),
+            Activation::Quadratic,
         );
         let flatten_output = layers::flatten_layer(conv_output.clone());
         let dense_output = layers::dense_layer_par(
