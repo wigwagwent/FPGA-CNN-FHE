@@ -52,9 +52,16 @@ impl SGDOptimizer {
     pub fn new(learning_rate: Quantized) -> Self {
         SGDOptimizer {
             learning_rate,
-            momentum: 0.9,  // Default momentum value
+            momentum: 0.9,
             dense_velocities: Vec::new(),
             conv_velocities: Vec::new(),
+        }
+    }
+
+    pub fn adjust_learning_rate(&mut self, epoch: usize, factor: Quantized, step_size: usize) {
+        if epoch > 0 && epoch % step_size == 0 {
+            self.learning_rate *= factor;
+            println!("Adjusted learning rate to: {}", self.learning_rate);
         }
     }
 

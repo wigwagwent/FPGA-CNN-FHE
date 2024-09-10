@@ -44,8 +44,13 @@ fn main() {
         );
 
         // Evaluate the model after each epoch
-        model.validate(&val_images);
-        model.validate(&train_images);
+        model.validate(&val_images, &String::from("testing"));
+        model.validate(&train_images, &String::from("training"));
+
+        // Adjust learning rate
+        let factor: Quantized = 0.5;
+        let step_size: usize = 2;
+        optimizer.adjust_learning_rate(epoch, factor, step_size)
     }
 }
 
@@ -129,7 +134,7 @@ impl Model {
         loss
     }
 
-    fn validate(&self, images: &Vec<MnistImage>) -> usize {
+    fn validate(&self, images: &Vec<MnistImage>, set: &String) -> usize {
         let correct_count = AtomicUsize::new(0);
         images.par_iter().for_each(|image| {
             let image_data: VecD2 = image
@@ -149,7 +154,8 @@ impl Model {
         let correct_count = correct_count.load(Ordering::Relaxed);
 
         println!(
-            "Accuracy after training: {:.2}%",
+            "Accuracy on {} set: {:.2}%",
+            set,
             correct_count as f32 / images.len() as f32 * 100.0
         );
         correct_count
