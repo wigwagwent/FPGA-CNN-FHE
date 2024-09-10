@@ -1,0 +1,9 @@
+[package]
+name = "fhe_rs_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+fhe = "0.1.0-beta.8"
+fhe-traits = "0.1.0-beta.8"
+rand = "0.8.5"
