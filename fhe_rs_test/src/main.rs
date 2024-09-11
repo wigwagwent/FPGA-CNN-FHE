@@ -14,67 +14,86 @@ fn encrypt_fixed_point(
     public_key: &PublicKey,
     parameters: &Arc<BfvParameters>,
 ) -> Ciphertext {
-    let scaled_value = (value * SCALE_FACTOR as f64).round() as i64;
-    assert!(scaled_value >= MIN_VALUE && scaled_value <= MAX_VALUE);
-    let clamped_value = scaled_value.clamp(MIN_VALUE, MAX_VALUE) as u64;
-    println!("Clamped value: {}", clamped_value);
-    let plaintext = Plaintext::try_encode(&[clamped_value], Encoding::poly(), parameters).unwrap();
+    let fixed_point = convert_to_fixed_point(value);
+    let plaintext = Plaintext::try_encode(&[fixed_point], Encoding::poly(), parameters).unwrap();
     public_key
         .try_encrypt(&plaintext, &mut thread_rng())
         .unwrap()
 }
 
-fn decrypt_fixed_point(ciphertext: &Ciphertext, secret_key: &SecretKey) -> f64 {
+fn convert_to_fixed_point(value: f64) -> i64 {
+    let scaled_value = (value * SCALE_FACTOR as f64).round() as i64;
+    assert!(scaled_value >= MIN_VALUE && scaled_value <= MAX_VALUE);
+    scaled_value
+}
+
+// fn decrypt_fixed_point(ciphertext: &Ciphertext, secret_key: &SecretKey) -> f64 {
+//     let decrypted_plaintext = secret_key.try_decrypt(ciphertext).unwrap();
+//     let decrypted_vec = Vec::<i64>::try_decode(&decrypted_plaintext, Encoding::poly()).unwrap();
+
+//     // let clamped_result = (decrypted_vec[0] as i64).clamp(MIN_VALUE, MAX_VALUE);
+//     // let result = clamped_result as f64 / SCALE_FACTOR as f64;
+//     // if clamped_result != decrypted_vec[0] as i64 {
+//     //     // println!("Value was clamped to: {}", result);
+//     // }
+//     // result
+//     decrypted_vec[0]
+// }
+
+fn decrypt_i64(ciphertext: &Ciphertext, secret_key: &SecretKey) -> i64 {
     let decrypted_plaintext = secret_key.try_decrypt(ciphertext).unwrap();
-    let decrypted_vec = Vec::<u64>::try_decode(&decrypted_plaintext, Encoding::poly()).unwrap();
+    let decrypted_vec = Vec::<i64>::try_decode(&decrypted_plaintext, Encoding::poly()).unwrap();
 
-    println!("Decrypted value: {}", decrypted_vec[0]);
-
-    let clamped_result = (decrypted_vec[0] as i64).clamp(MIN_VALUE, MAX_VALUE);
-    let result = clamped_result as f64 / SCALE_FACTOR as f64;
-    if clamped_result != decrypted_vec[0] as i64 {
-        println!("Value was clamped to: {}", result);
-    }
-    result
+    // let clamped_result = (decrypted_vec[0] as i64).clamp(MIN_VALUE, MAX_VALUE);
+    // let result = clamped_result as f64 / SCALE_FACTOR as f64;
+    // if clamped_result != decrypted_vec[0] as i64 {
+    //     // println!("Value was clamped to: {}", result);
+    // }
+    // result
+    decrypted_vec[0]
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let parameters = BfvParametersBuilder::new()
-        .set_degree(8192)
-        .set_moduli_sizes(&[60, 60, 60])
-        .set_plaintext_modulus(1 << 32) // Reduced to accommodate 32-bit intermediate results
+        .set_degree(4096)
+        .set_moduli(&[
+            0x7fffffffba0001, // 55 bits
+            0x7fffffffaa0001, // 55 bits
+            0x7fffffff7e0001, // 55 bits
+            0x7fffffff380001, // 55 bits (added an extra modulus)
+        ])
+        .set_plaintext_modulus(1 << 32) // 32-bit plaintext modulus
         .build_arc()?;
 
     let secret_key = SecretKey::random(&parameters, &mut thread_rng());
     let public_key = PublicKey::new(&secret_key, &mut thread_rng());
 
-    // Example fixed-point numbers
     let a = 0.543623;
     let b = 0.34543;
 
-    // Encrypt fixed-point numbers
     let encrypted_a = encrypt_fixed_point(a, &public_key, &parameters);
     let encrypted_b = encrypt_fixed_point(b, &public_key, &parameters);
 
-    // Perform addition
-    //let encrypted_sum = &encrypted_a + &encrypted_b;
-    //let decrypted_sum = decrypt_fixed_point(&encrypted_sum, &secret_key);
-
-    // Perform multiplication
-    let encrypted_product = &encrypted_a * &encrypted_b;
-
-    // For multiplication, we need to scale down by SCALE_FACTOR
-    let scale_down_factor =
-        encrypt_fixed_point(1.0 / SCALE_FACTOR as f64, &public_key, &parameters);
-    let scaled_product = &encrypted_product * &scale_down_factor;
-
-    let decrypted_product = decrypt_fixed_point(&encrypted_product, &secret_key);
+    let mut encrypted_product = &encrypted_a * &encrypted_b;
+    let decrypted_product = decrypt_i64(&encrypted_product, &secret_key);
 
     println!("Original numbers: a = {}, b = {}", a, b);
-    //println!("Encrypted addition result: {}", decrypted_sum);
-    println!("Actual addition result: {}", a + b);
     println!("Encrypted multiplication result: {}", decrypted_product);
-    println!("Actual multiplication result: {}", a * b);
+
+    for i in 1..=3 {
+        if let Ok(()) = encrypted_product.mod_switch_to_next_level() {
+            let decrypted_scaled = decrypt_i64(&encrypted_product, &secret_key);
+            println!("Scaled result (level {}): {}", i, decrypted_scaled);
+        } else {
+            println!("Cannot perform further modulus switching");
+            break;
+        }
+    }
+
+    println!(
+        "Actual multiplication result (Fixed Raw): {}",
+        convert_to_fixed_point(a) * convert_to_fixed_point(b)
+    );
 
     Ok(())
 }
