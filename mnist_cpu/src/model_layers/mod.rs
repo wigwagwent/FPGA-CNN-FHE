@@ -1,3 +1,4 @@
+use fhe_ckks::Plaintext;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 //use std::ops::{Add, Mul, Sub};
@@ -14,6 +15,24 @@ pub type VecD2 = Vec<Vec<Quantized>>; // 2D vector for convolutional layer
 pub enum Weights {
     Convolution { kernel: VecD2, bias: Quantized },
     Dense { weights: VecD1, bias: Quantized },
+}
+
+#[derive(Clone, Debug)]
+pub enum WeightsFhe {
+    Convolution { kernel: VecD2, bias: Quantized },
+    Dense { weights: Plaintext, bias: Plaintext },
+}
+
+impl From<Weights> for WeightsFhe {
+    fn from(weights: Weights) -> Self {
+        match weights {
+            Weights::Convolution { kernel, bias } => WeightsFhe::Convolution { kernel, bias },
+            Weights::Dense { weights, bias } => WeightsFhe::Dense {
+                weights: Plaintext::from(weights.clone()),
+                bias: Plaintext::from(vec![bias; weights.len()]),
+            },
+        }
+    }
 }
 
 impl Weights {

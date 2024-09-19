@@ -1,0 +1,19 @@
+[package]
+name = "fhe_ckks"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+num-bigint = "0.4"
+num-complex = "0.4"
+num-integer = "0.1"
+num-traits = "0.2"
+rand = "0.8"
+
+[features]
+default = ["i64", "emulated"]
+emulated = []
+i8 = []
+i16 = []
+i32 = []
+i64 = []

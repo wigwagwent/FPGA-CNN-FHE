@@ -1,5 +1,6 @@
+use fhe_ckks::{Ciphertext, Plaintext};
 use mnist_lib::{self, MnistDataset, MnistImage};
-use model_layers::layers;
+use model_layers::{layers, WeightsFhe};
 use model_layers::{Activation, Quantized, SGDOptimizer, VecD1, VecD2, Weights};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -55,6 +56,28 @@ pub struct Model {
     dense_weights: Vec<Weights>,
 }
 
+pub struct ModelFhe {
+    conv_weights: Vec<WeightsFhe>,
+    dense_weights: Vec<WeightsFhe>,
+}
+
+impl From<&Model> for ModelFhe {
+    fn from(model: &Model) -> Self {
+        ModelFhe {
+            conv_weights: model
+                .conv_weights
+                .iter()
+                .map(|w| WeightsFhe::from(w.clone()))
+                .collect(),
+            dense_weights: model
+                .dense_weights
+                .iter()
+                .map(|w| WeightsFhe::from(w.clone()))
+                .collect(),
+        }
+    }
+}
+
 impl Model {
     pub fn new(mut weights: Vec<Weights>) -> Self {
         let dense_weights = weights.split_off(weights.len() - 10);
@@ -81,6 +104,37 @@ impl Model {
             self.dense_weights.clone(),
             Activation::Softmax,
         )
+    }
+
+    pub fn forward_fhe(&self, input: VecD2) -> VecD1 {
+        let fhe_model = ModelFhe::from(self);
+
+        let conv_output =
+            layers::convolution_layer(input, self.conv_weights.clone(), Activation::Quadratic);
+
+        let conv_output_fhe: Vec<Vec<Ciphertext>> = conv_output
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|val| Plaintext::from(val.clone()).encrypt())
+                    .collect()
+            })
+            .collect();
+
+        let flatten_output = layers::flatten_layer_fhe(conv_output_fhe);
+
+        let dense_output = layers::dense_layer_fhe(
+            flatten_output,
+            fhe_model.dense_weights.clone(),
+            Activation::None,
+        );
+
+        let decrypted_dense_output: VecD1 = dense_output
+            .iter()
+            .map(|val| Vec::from(val.decrypt()).iter().sum())
+            .collect();
+
+        layers::activation_layer(decrypted_dense_output, Activation::Softmax)
     }
 
     pub fn train(
@@ -143,7 +197,7 @@ impl Model {
                 .map(|row| row.iter().map(|&pixel| pixel as f32).collect())
                 .collect();
 
-            let output = self.forward(image_data);
+            let output = self.forward_fhe(image_data);
             let predicted_class = get_predicted_class(output);
 
             if image.label == mnist_lib::MnistDigit::from_usize(predicted_class) {
