@@ -1,7 +1,8 @@
-use fhe_ckks::{Ciphertext, Plaintext};
+use fhe_ckks::{Ciphertext, DoubleSized, Plaintext};
 use mnist_lib::{self, MnistDataset, MnistImage};
 use model_layers::{layers, WeightsFhe};
 use model_layers::{Activation, Quantized, SGDOptimizer, VecD1, VecD2, Weights};
+use num_traits::{PrimInt, Signed};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
@@ -56,12 +57,18 @@ pub struct Model {
     dense_weights: Vec<Weights>,
 }
 
-pub struct ModelFhe {
-    conv_weights: Vec<WeightsFhe>,
-    dense_weights: Vec<WeightsFhe>,
+pub struct ModelFhe<T, const N: usize>
+where
+    T: PrimInt + Signed + DoubleSized,
+{
+    conv_weights: Vec<WeightsFhe<T, N>>,
+    dense_weights: Vec<WeightsFhe<T, N>>,
 }
 
-impl From<&Model> for ModelFhe {
+impl<T, const N: usize> From<&Model> for ModelFhe<T, N>
+where
+    T: PrimInt + Signed + DoubleSized,
+{
     fn from(model: &Model) -> Self {
         ModelFhe {
             conv_weights: model
@@ -107,24 +114,27 @@ impl Model {
     }
 
     pub fn forward_fhe(&self, input: VecD2) -> VecD1 {
-        let fhe_model = ModelFhe::from(self);
+        let fhe_model: ModelFhe<i64, 5408> = ModelFhe::from(self);
 
         let conv_output =
             layers::convolution_layer(input, self.conv_weights.clone(), Activation::Quadratic);
 
-        let conv_output_fhe: Vec<Vec<Ciphertext>> = conv_output
-            .iter()
-            .map(|row| {
-                row.iter()
-                    .map(|val| Plaintext::from(val.clone()).encrypt())
-                    .collect()
-            })
-            .collect();
+        // let conv_output_fhe: Vec<Vec<Ciphertext<i32, 15>>> = conv_output
+        //     .iter()
+        //     .map(|row| {
+        //         row.iter()
+        //             .map(|val| Plaintext::from_f32(val.clone(), 15).encrypt())
+        //             .collect()
+        //     })
+        //     .collect();
 
-        let flatten_output = layers::flatten_layer_fhe(conv_output_fhe);
+        let flatten_output = layers::flatten_layer(conv_output);
+
+        let flatten_output_fhe: Ciphertext<i64, 5408> =
+            Plaintext::from_f32(flatten_output, 15).encrypt();
 
         let dense_output = layers::dense_layer_fhe(
-            flatten_output,
+            flatten_output_fhe,
             fhe_model.dense_weights.clone(),
             Activation::None,
         );
@@ -143,6 +153,7 @@ impl Model {
         target: VecD1,
         optimizer: &mut SGDOptimizer,
     ) -> Quantized {
+        //self.forward_fhe(input.clone());
         // Forward pass
         let conv_output = layers::convolution_layer_par(
             input.clone(),

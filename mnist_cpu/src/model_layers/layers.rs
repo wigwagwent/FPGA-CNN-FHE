@@ -1,12 +1,13 @@
 use fhe_ckks::Ciphertext;
+use fhe_ckks::DoubleSized;
+use num_traits::PrimInt;
+use num_traits::Signed;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 
 use crate::model_layers::activation::quadratic_activation;
 use crate::model_layers::activation::relu_activation;
 use crate::model_layers::activation::softmax_activation;
-
-use fhe_ckks::Plaintext;
 
 use super::WeightsFhe;
 use super::{Activation, Quantized, VecD1, VecD2, Weights};
@@ -137,12 +138,15 @@ fn dense(inputs: VecD1, weights: Weights) -> Quantized {
     sum
 }
 
-pub fn dense_layer_fhe(
-    inputs: Ciphertext,
-    weights: Vec<WeightsFhe>,
+pub fn dense_layer_fhe<T, const N: usize>(
+    inputs: Ciphertext<T, N>,
+    weights: Vec<WeightsFhe<T, N>>,
     activation: Activation,
-) -> Vec<Ciphertext> {
-    let mut output: Vec<Ciphertext> = Vec::new();
+) -> Vec<Ciphertext<T, N>>
+where
+    T: PrimInt + Signed + DoubleSized,
+{
+    let mut output: Vec<Ciphertext<T, N>> = Vec::new();
     for i in 0..weights.len() {
         let result = dense_fhe(&inputs, &weights[i]);
         //println!("Dense output {}: {:?}", i, result);
@@ -154,7 +158,13 @@ pub fn dense_layer_fhe(
     }
 }
 
-pub fn dense_fhe(inputs: &Ciphertext, weights: &WeightsFhe) -> Ciphertext {
+pub fn dense_fhe<T, const N: usize>(
+    inputs: &Ciphertext<T, N>,
+    weights: &WeightsFhe<T, N>,
+) -> Ciphertext<T, N>
+where
+    T: PrimInt + Signed + DoubleSized,
+{
     let (weights, bias) = match weights {
         WeightsFhe::Dense { weights, bias } => (weights, bias),
         _ => panic!("Invalid weights for dense layer"),
@@ -174,26 +184,26 @@ pub fn flatten_layer(outputs: Vec<VecD2>) -> VecD1 {
     flat_output
 }
 
-pub fn flatten_layer_fhe(outputs: Vec<Vec<Ciphertext>>) -> Ciphertext {
-    assert!(
-        !outputs.is_empty() && !outputs[0].is_empty(),
-        "Outputs cannot be empty"
-    );
+// pub fn flatten_layer_fhe(outputs: Vec<Vec<Ciphertext<T, N>>>) -> Ciphertext<T, N> {
+//     assert!(
+//         !outputs.is_empty() && !outputs[0].is_empty(),
+//         "Outputs cannot be empty"
+//     );
 
-    // Collect all ciphertexts into a single vector
-    let all_ciphertexts: Vec<Ciphertext> = outputs
-        .into_iter()
-        .flat_map(|output| output.into_iter())
-        .collect();
+//     // Collect all ciphertexts into a single vector
+//     let all_ciphertexts: Vec<Ciphertext<i32, 15>> = outputs
+//         .into_iter()
+//         .flat_map(|output| output.into_iter())
+//         .collect();
 
-    // Perform a single concatenation of all ciphertexts
-    let mut result = all_ciphertexts[0].clone();
-    for ciphertext in all_ciphertexts.iter().skip(1) {
-        result = result.concatenate(ciphertext);
-    }
+//     // Perform a single concatenation of all ciphertexts
+//     let mut result = all_ciphertexts[0].clone();
+//     for ciphertext in all_ciphertexts.iter().skip(1) {
+//         result = result.concatenate(ciphertext);
+//     }
 
-    result
-}
+//     result
+// }
 
 pub fn backprop_dense(
     input: &VecD1,

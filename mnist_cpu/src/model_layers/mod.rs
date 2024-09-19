@@ -1,4 +1,5 @@
-use fhe_ckks::Plaintext;
+use fhe_ckks::{DoubleSized, Plaintext};
+use num_traits::{PrimInt, Signed};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 //use std::ops::{Add, Mul, Sub};
@@ -18,18 +19,30 @@ pub enum Weights {
 }
 
 #[derive(Clone, Debug)]
-pub enum WeightsFhe {
-    Convolution { kernel: VecD2, bias: Quantized },
-    Dense { weights: Plaintext, bias: Plaintext },
+pub enum WeightsFhe<T, const N: usize>
+where
+    T: PrimInt + Signed + DoubleSized,
+{
+    Convolution {
+        kernel: VecD2,
+        bias: Quantized,
+    },
+    Dense {
+        weights: Plaintext<T, N>,
+        bias: Plaintext<T, N>,
+    },
 }
 
-impl From<Weights> for WeightsFhe {
+impl<T, const N: usize> From<Weights> for WeightsFhe<T, N>
+where
+    T: PrimInt + Signed + DoubleSized,
+{
     fn from(weights: Weights) -> Self {
         match weights {
             Weights::Convolution { kernel, bias } => WeightsFhe::Convolution { kernel, bias },
             Weights::Dense { weights, bias } => WeightsFhe::Dense {
-                weights: Plaintext::from(weights.clone()),
-                bias: Plaintext::from(vec![bias; weights.len()]),
+                weights: Plaintext::from_f32(weights.clone(), 15),
+                bias: Plaintext::from_f32(vec![bias; weights.len()], 15),
             },
         }
     }

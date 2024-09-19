@@ -1,116 +1,176 @@
-use crate::CoeffType;
+use double_size::DoubleSized;
+use num_traits::{PrimInt, Signed};
+use polynomial_coefficients::PolynomialCoefficients;
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Polynomial {
-    pub(crate) coeffs: Vec<CoeffType>,
+pub mod double_size;
+mod polynomial_coefficients;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Polynomial<T, const N: usize>
+where
+    T: PrimInt + Signed + Clone + Copy,
+{
+    pub(crate) coeffs: [PolynomialCoefficients<T>; N],
 }
 
-impl Polynomial {
-    pub fn new(coeffs: Vec<CoeffType>) -> Self {
-        Self { coeffs }
+impl<T, const N: usize> Polynomial<T, N>
+where
+    T: PrimInt + Signed + Clone + Copy + DoubleSized,
+{
+    pub fn new(coeffs: Vec<T>) -> Self {
+        assert!(
+            coeffs.len() <= N,
+            "{}",
+            format!("Expected {} coefficients or less", N)
+        );
+        let mut array = [PolynomialCoefficients::default(); N];
+        for (i, coeff) in coeffs.into_iter().enumerate() {
+            array[i] = PolynomialCoefficients::new(coeff);
+        }
+        Self { coeffs: array }
     }
 
-    pub fn empty() -> Self {
-        Self { coeffs: vec![] }
+    pub fn default() -> Self {
+        Self {
+            coeffs: [PolynomialCoefficients::default(); N],
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        N
+    }
+
+    pub fn used_len(&self) -> usize {
+        self.coeffs.iter().filter(|c| c.has_data).count()
     }
 
     /// Adds two polynomials in the ring.
-    pub fn add(&self, poly: &Polynomial, coeff_modulus: Option<u128>) -> Polynomial {
-        let mut result = vec![0; self.coeffs.len()];
-        for i in 0..self.coeffs.len() {
-            result[i] = self.coeffs[i] + poly.coeffs[i];
-            if let Some(modulus) = coeff_modulus {
-                result[i] %= modulus as CoeffType;
-            }
+    pub fn add(
+        &self,
+        poly: &Polynomial<T, N>,
+        coeff_modulus: Option<T::Double>,
+    ) -> Polynomial<T, N> {
+        let mut result = [PolynomialCoefficients::default(); N];
+
+        for i in 0..N {
+            let sum = self.coeffs[i].to_double() + poly.coeffs[i].to_double();
+            let modded_sum = if let Some(modulus) = coeff_modulus {
+                let mod_sum = sum % modulus;
+                (mod_sum + modulus) % modulus
+            } else {
+                sum
+            };
+            result[i] = PolynomialCoefficients::<T>::from_double(modded_sum); //TODO: Make this modded_sum.from_double()
         }
-        Polynomial::new(result)
+
+        Polynomial { coeffs: result }
     }
 
-    /// Subtracts second polynomial from first polynomial in the ring.
-    pub fn subtract(&self, poly: &Polynomial, coeff_modulus: Option<u128>) -> Polynomial {
-        let mut result = vec![0; self.coeffs.len()];
-        for i in 0..self.coeffs.len() {
-            result[i] = self.coeffs[i] - poly.coeffs[i];
-            if let Some(modulus) = coeff_modulus {
-                // TODO: This is most likely incorrect
-                result[i] = (result[i] % modulus as CoeffType + modulus as CoeffType)
-                    % modulus as CoeffType;
-                // Ensure positive result
-            }
+    /// Subtracts two polynomials in the ring.
+    pub fn subtract(
+        &self,
+        poly: &Polynomial<T, N>,
+        coeff_modulus: Option<T::Double>,
+    ) -> Polynomial<T, N> {
+        let mut result = [PolynomialCoefficients::default(); N];
+
+        for i in 0..N {
+            let diff = self.coeffs[i].to_double() - poly.coeffs[i].to_double();
+
+            let modded_diff = if let Some(modulus) = coeff_modulus.clone() {
+                let mod_diff = diff % modulus;
+                (mod_diff + modulus) % modulus
+            } else {
+                diff
+            };
+
+            result[i] = PolynomialCoefficients::<T>::from_double(modded_diff);
         }
-        Polynomial::new(result)
+
+        Polynomial { coeffs: result }
     }
 
-    /// Multiplies a polynomial by another polynomial.
+    /// Multiplies two polynomials in the ring.
     pub fn multiply(
         &self,
-        poly: &Polynomial,
+        poly: &Polynomial<T, N>,
         scaling_factor: usize,
-        coeff_modulus: Option<u128>,
-    ) -> Polynomial {
-        assert!(self.coeffs.len() == poly.coeffs.len());
-        let mut result = vec![0; self.coeffs.len()];
-        for i in 0..self.coeffs.len() {
-            result[i] = self.coeffs[i] * poly.coeffs[i];
-            result[i] >>= scaling_factor;
-            if let Some(modulus) = coeff_modulus {
-                result[i] %= modulus as CoeffType;
-            }
+        coeff_modulus: Option<T::Double>,
+    ) -> Polynomial<T, N> {
+        let mut result = [PolynomialCoefficients::default(); N];
+
+        for i in 0..N {
+            let product = self.coeffs[i].to_double() * poly.coeffs[i].to_double();
+            let scaled_product = product >> scaling_factor;
+
+            let modded_product = if let Some(modulus) = coeff_modulus.clone() {
+                let mod_product = scaled_product % modulus;
+                (mod_product + modulus) % modulus
+            } else {
+                scaled_product
+            };
+
+            result[i] = PolynomialCoefficients::<T>::from_double(modded_product);
         }
-        Polynomial::new(result)
+
+        Polynomial { coeffs: result }
     }
 
-    /// Multiplies polynomial by a scalar.
-    pub fn scalar_multiply(&self, scalar: CoeffType, coeff_modulus: Option<u128>) -> Polynomial {
-        let mut new_coeffs = vec![0; self.coeffs.len()];
-        for i in 0..self.coeffs.len() {
-            new_coeffs[i] = self.coeffs[i] * scalar;
-            if let Some(modulus) = coeff_modulus {
-                new_coeffs[i] %= modulus as CoeffType;
-            }
+    /// Rotates the polynomial to the right by the given amount.
+    pub fn rotate_right(&self, amount: usize) -> Polynomial<T, N> {
+        let mut result = [PolynomialCoefficients::default(); N];
+
+        for i in 0..N {
+            result[i] = self.coeffs[(i + amount) % N];
         }
-        Polynomial::new(new_coeffs)
+
+        Polynomial { coeffs: result }
     }
 
-    /// Divides polynomial by a scalar.
-    pub fn scalar_integer_divide(
-        &self,
-        scalar: CoeffType,
-        coeff_modulus: Option<CoeffType>,
-    ) -> Polynomial {
-        let mut new_coeffs = vec![0; self.coeffs.len()];
-        for i in 0..self.coeffs.len() {
-            new_coeffs[i] = self.coeffs[i] / scalar;
-            if let Some(modulus) = coeff_modulus {
-                new_coeffs[i] = (new_coeffs[i] % modulus + modulus) % modulus; // Ensure positive result
-            }
-        }
-        Polynomial::new(new_coeffs)
-    }
+    // /// Multiplies polynomial by a scalar.
+    // pub fn scalar_multiply(&self, scalar: CoeffType, coeff_modulus: Option<ModType>) -> Polynomial {
+    //     let mut new_coeffs = vec![0; self.coeffs.len()];
+    //     for i in 0..self.coeffs.len() {
+    //         new_coeffs[i] = self.coeffs[i] * scalar;
+    //         if let Some(modulus) = coeff_modulus {
+    //             new_coeffs[i] %= modulus as CoeffType;
+    //         }
+    //     }
+    //     Polynomial::new(new_coeffs)
+    // }
 
-    /// Mods all coefficients in the given coefficient modulus.
-    pub fn modulo(&self, coeff_modulus: i64) -> Polynomial {
-        let new_coeffs: Vec<i64> = self
-            .coeffs
-            .iter()
-            .map(|&c| (c % coeff_modulus + coeff_modulus) % coeff_modulus)
-            .collect();
-        Polynomial::new(new_coeffs)
-    }
+    // /// Divides polynomial by a scalar.
+    // pub fn scalar_integer_divide(
+    //     &self,
+    //     scalar: CoeffType,
+    //     coeff_modulus: Option<CoeffType>,
+    // ) -> Polynomial {
+    //     let mut new_coeffs = vec![0; self.coeffs.len()];
+    //     for i in 0..self.coeffs.len() {
+    //         new_coeffs[i] = self.coeffs[i] / scalar;
+    //         if let Some(modulus) = coeff_modulus {
+    //             new_coeffs[i] = (new_coeffs[i] % modulus + modulus) % modulus; // Ensure positive result
+    //         }
+    //     }
+    //     Polynomial::new(new_coeffs)
+    // }
 
-    /// Evaluates the polynomial at the given input value.
-    pub fn evaluate(&self, inp: i64) -> i64 {
-        let mut result = self.coeffs[self.coeffs.len() - 1];
-        for i in (0..self.coeffs.len() - 1).rev() {
-            result = result * inp + self.coeffs[i];
-        }
-        result
-    }
+    // /// Mods all coefficients in the given coefficient modulus.
+    // pub fn modulo(&self, coeff_modulus: i64) -> Polynomial {
+    //     let new_coeffs: Vec<i64> = self
+    //         .coeffs
+    //         .iter()
+    //         .map(|&c| (c % coeff_modulus + coeff_modulus) % coeff_modulus)
+    //         .collect();
+    //     Polynomial::new(new_coeffs)
+    // }
 
-    pub fn concatenate(&self, poly: &Polynomial) -> Polynomial {
-        let mut result = Vec::new();
-        result.extend_from_slice(&self.coeffs);
-        result.extend_from_slice(&poly.coeffs);
-        Polynomial::new(result)
-    }
+    // /// Evaluates the polynomial at the given input value.
+    // pub fn evaluate(&self, inp: i64) -> i64 {
+    //     let mut result = self.coeffs[self.coeffs.len() - 1];
+    //     for i in (0..self.coeffs.len() - 1).rev() {
+    //         result = result * inp + self.coeffs[i];
+    //     }
+    //     result
+    // }
 }

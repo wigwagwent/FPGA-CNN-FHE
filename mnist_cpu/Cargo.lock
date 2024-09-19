@@ -55,6 +55,7 @@ checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
 name = "fhe_ckks"
 version = "0.1.0"
 dependencies = [
+ "log",
  "num-bigint",
  "num-complex",
  "num-integer",
@@ -86,6 +87,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8adc4bb1803a324070e64a98ae98f38934d91957a99cfb3a43dcbc01bc56439"
 
 [[package]]
+name = "log"
+version = "0.4.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
+
+[[package]]
 name = "memchr"
 version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -97,6 +104,7 @@ version = "0.1.0"
 dependencies = [
  "fhe_ckks",
  "mnist_lib",
+ "num-traits",
  "rand",
  "rayon",
  "serde",
