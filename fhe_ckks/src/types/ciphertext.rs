@@ -36,7 +36,13 @@ impl Ciphertext {
     }
 }
 
+#[cfg(feature = "emulated")]
 impl Ciphertext {
+    pub fn decrypt(&self) -> Plaintext {
+        Plaintext::new(self.c0.clone(), self.scaling_factor)
+    }
+
+    #[deprecated = "This is not acutally possible with fhe"]
     pub fn concatenate(&self, ciphertext: &Ciphertext) -> Ciphertext {
         assert!(self.scaling_factor == ciphertext.scaling_factor);
         assert!(self.modulus == ciphertext.modulus);
@@ -45,13 +51,6 @@ impl Ciphertext {
         let concat_c1: Polynomial = self.c1.concatenate(&ciphertext.c1);
 
         Ciphertext::new(concat_c0, concat_c1, self.scaling_factor, self.modulus)
-    }
-}
-
-#[cfg(feature = "emulated")]
-impl Ciphertext {
-    pub fn decrypt(&self) -> Plaintext {
-        Plaintext::new(self.c0.clone(), self.scaling_factor)
     }
 
     pub fn new_emulated(c0: Polynomial, scaling_factor: usize) -> Self {
