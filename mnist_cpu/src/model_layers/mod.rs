@@ -91,6 +91,13 @@ impl SGDOptimizer {
         }
     }
 
+    pub fn adjust_learning_rate(&mut self, epoch: usize, factor: Quantized, step_size: usize) {
+        if epoch > 0 && epoch % step_size == 0 {
+            self.learning_rate *= factor;
+            println!("Adjusted learning rate to: {}", self.learning_rate);
+        }
+    }
+
     // Initialize the velocities for both dense and convolutional weights
     pub fn initialize_velocities(
         &mut self,
