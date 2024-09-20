@@ -1,0 +1,17 @@
+[package]
+name = "fhe_ckks"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+num-bigint = "0.4"
+num-complex = "0.4"
+num-integer = "0.1"
+num-traits = "0.2"
+rand = "0.8"
+log = { version = "0.4.22", optional = true }
+
+[features]
+default = ["emulated", "debug"]
+emulated = []
+debug = ["log"]
