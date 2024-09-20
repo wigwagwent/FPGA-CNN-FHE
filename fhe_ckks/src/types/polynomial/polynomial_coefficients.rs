@@ -122,6 +122,25 @@ where
     }
 }
 
+impl<T> Mul<T> for PolynomialCoefficients<T>
+where
+    T: PrimInt + Signed + Clone + Copy,
+{
+    type Output = Self;
+
+    fn mul(self, other: T) -> Self {
+        #[cfg(feature = "debug")]
+        if !self.has_data {
+            debug!("Multiplying uninitialized coefficients");
+        }
+
+        Self {
+            coeffs: self.coeffs * other,
+            has_data: true,
+        }
+    }
+}
+
 impl<T> Rem for PolynomialCoefficients<T>
 where
     T: PrimInt + Signed + Clone + Copy,

@@ -127,7 +127,47 @@ where
         Polynomial { coeffs: result }
     }
 
-    // /// Multiplies polynomial by a scalar.
+    /// Turns all coefficients in the given coefficient modulus
+    /// to the range (-q/2, q/2].
+    /// Turns all coefficients of the current polynomial
+    /// in the given coefficient modulus to the range (-q/2, q/2].
+    /// Args:
+    ///     coeff_modulus (int): Modulus a of coefficients of polynomial
+    ///         ring R_a.
+    /// Returns:
+    ///     A Polynomial whose coefficients are modulo coeff_modulus.
+    pub fn mod_small(&self, coeff_modulus: Option<T::Double>) -> Polynomial<T, N> {
+        let mut new_coeffs = [PolynomialCoefficients::default(); N];
+        for i in 0..N {
+            let coeff = self.coeffs[i].to_double();
+            let modded_coeff = if let Some(modulus) = coeff_modulus.clone() {
+                let mod_coeff = coeff % modulus;
+                (mod_coeff + modulus) % modulus
+            } else {
+                coeff
+            };
+            new_coeffs[i] = PolynomialCoefficients::<T>::from_double(modded_coeff);
+        }
+
+        Polynomial { coeffs: new_coeffs }
+    }
+
+    /// Multiplies polynomial by a scalar.
+    pub fn scalar_multiply(&self, scalar: T, coeff_modulus: Option<T::Double>) -> Polynomial<T, N> {
+        let mut new_coeffs = [PolynomialCoefficients::default(); N];
+        for i in 0..N {
+            let product = self.coeffs[i].to_double() * scalar.to_double();
+            let modded_product = if let Some(modulus) = coeff_modulus.clone() {
+                let mod_product = product % modulus;
+                (mod_product + modulus) % modulus
+            } else {
+                product
+            };
+            new_coeffs[i] = PolynomialCoefficients::<T>::from_double(modded_product);
+        }
+
+        Polynomial { coeffs: new_coeffs }
+    }
     // pub fn scalar_multiply(&self, scalar: CoeffType, coeff_modulus: Option<ModType>) -> Polynomial {
     //     let mut new_coeffs = vec![0; self.coeffs.len()];
     //     for i in 0..self.coeffs.len() {

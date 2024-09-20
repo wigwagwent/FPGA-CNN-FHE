@@ -1,6 +1,9 @@
 //mod evaluator;
-//mod util;
+mod ckks;
 mod types;
+mod util;
+
+pub use ckks::key_generator::CkksEncryption;
 
 pub use types::ciphertext::Ciphertext;
 pub use types::plaintext::Plaintext;

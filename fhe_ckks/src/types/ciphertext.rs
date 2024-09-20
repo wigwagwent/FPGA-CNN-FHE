@@ -40,13 +40,13 @@ where
         c0: Polynomial<T, N>,
         c1: Polynomial<T, N>,
         scaling_factor: usize,
-        modulus: i128,
+        modulus: T::Double,
     ) -> Self {
         Self {
             c0,
             c1,
             scaling_factor,
-            modulus: T::from(modulus).unwrap().to_double(),
+            modulus,
         }
     }
 }
@@ -85,37 +85,67 @@ where
     pub fn add(&self, ciphertext: &Ciphertext<T, N>) -> Ciphertext<T, N> {
         assert!(self.scaling_factor == ciphertext.scaling_factor);
         let new_c0 = self.c0.add(&ciphertext.c0, None);
-        Ciphertext::new(new_c0, Polynomial::default(), self.scaling_factor, 1)
+        Ciphertext::new(
+            new_c0,
+            Polynomial::default(),
+            self.scaling_factor,
+            T::one().to_double(),
+        )
     }
 
     pub fn add_plain(&self, plaintext: &Plaintext<T, N>) -> Ciphertext<T, N> {
         assert!(self.scaling_factor == plaintext.scaling_factor);
         let new_c0 = self.c0.add(&plaintext.poly, None);
-        Ciphertext::new(new_c0, Polynomial::default(), self.scaling_factor, 1)
+        Ciphertext::new(
+            new_c0,
+            Polynomial::default(),
+            self.scaling_factor,
+            T::one().to_double(),
+        )
     }
 
     pub fn subtract(&self, ciphertext: &Ciphertext<T, N>) -> Ciphertext<T, N> {
         assert!(self.scaling_factor == ciphertext.scaling_factor);
         let new_c0 = self.c0.subtract(&ciphertext.c0, None);
-        Ciphertext::new(new_c0, Polynomial::default(), self.scaling_factor, 1)
+        Ciphertext::new(
+            new_c0,
+            Polynomial::default(),
+            self.scaling_factor,
+            T::one().to_double(),
+        )
     }
 
     pub fn subtract_plain(&self, plaintext: &Plaintext<T, N>) -> Ciphertext<T, N> {
         assert!(self.scaling_factor == plaintext.scaling_factor);
         let new_c0 = self.c0.subtract(&plaintext.poly, None);
-        Ciphertext::new(new_c0, Polynomial::default(), self.scaling_factor, 1)
+        Ciphertext::new(
+            new_c0,
+            Polynomial::default(),
+            self.scaling_factor,
+            T::one().to_double(),
+        )
     }
 
     pub fn multiply(&self, ciphertext: &Ciphertext<T, N>) -> Ciphertext<T, N> {
         assert!(self.scaling_factor == ciphertext.scaling_factor);
         let new_c0 = self.c0.multiply(&ciphertext.c0, self.scaling_factor, None);
-        Ciphertext::new(new_c0, Polynomial::default(), self.scaling_factor, 1)
+        Ciphertext::new(
+            new_c0,
+            Polynomial::default(),
+            self.scaling_factor,
+            T::one().to_double(),
+        )
     }
 
     pub fn multiply_plain(&self, plaintext: &Plaintext<T, N>) -> Ciphertext<T, N> {
         assert!(self.scaling_factor == plaintext.scaling_factor);
         let new_c0 = self.c0.multiply(&plaintext.poly, self.scaling_factor, None);
-        Ciphertext::new(new_c0, Polynomial::default(), self.scaling_factor, 1)
+        Ciphertext::new(
+            new_c0,
+            Polynomial::default(),
+            self.scaling_factor,
+            T::one().to_double(),
+        )
     }
 }
 
