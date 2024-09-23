@@ -82,10 +82,10 @@ pub struct SGDOptimizer {
 }
 
 impl SGDOptimizer {
-    pub fn new(learning_rate: Quantized) -> Self {
+    pub fn new(learning_rate: Quantized, momentum: Quantized) -> Self {
         SGDOptimizer {
             learning_rate,
-            momentum: 0.9, // Default momentum value
+            momentum,
             dense_velocities: Vec::new(),
             conv_velocities: Vec::new(),
         }
@@ -107,7 +107,7 @@ impl SGDOptimizer {
         self.dense_velocities = dense_weights
             .iter()
             .map(|w| match w {
-                Weights::Dense { weights, bias: _ } => Weights::Dense {
+                Weights::Dense { weights, .. } => Weights::Dense {
                     weights: vec![0.0; weights.len()],
                     bias: 0.0,
                 },
@@ -118,7 +118,7 @@ impl SGDOptimizer {
         self.conv_velocities = conv_weights
             .iter()
             .map(|w| match w {
-                Weights::Convolution { kernel, bias: _ } => Weights::Convolution {
+                Weights::Convolution { kernel, .. } => Weights::Convolution {
                     kernel: vec![vec![0.0; kernel[0].len()]; kernel.len()],
                     bias: 0.0,
                 },
@@ -127,90 +127,76 @@ impl SGDOptimizer {
             .collect();
     }
 
-    // Update the weights using momentum and the gradients
-    pub fn update(&mut self, weights: &mut Weights, gradients: &Weights) {
-        match (weights, gradients) {
-            (
-                Weights::Convolution { kernel, bias },
-                Weights::Convolution {
-                    kernel: grad_kernel,
-                    bias: grad_bias,
-                },
-            ) => {
-                // Ensure velocities are initialized
-                if self.conv_velocities.is_empty() {
-                    panic!("Conv velocities not initialized.");
-                }
-
-                // Get the corresponding velocity for this weight
-                let velocity = self
-                    .conv_velocities
-                    .iter_mut()
-                    .find(|v| matches!(v, Weights::Convolution { .. }))
-                    .unwrap();
-
-                match velocity {
-                    Weights::Convolution {
-                        kernel: vel_kernel,
-                        bias: vel_bias,
-                    } => {
-                        // Update the velocities and weights for convolutional layers
-                        for ((v_k, g_k), w_k) in vel_kernel
-                            .iter_mut()
-                            .zip(grad_kernel.iter())
-                            .zip(kernel.iter_mut())
-                        {
-                            for ((v, g), w) in v_k.iter_mut().zip(g_k.iter()).zip(w_k.iter_mut()) {
-                                *v = self.momentum * (*v) + (1.0 - self.momentum) * g;
-                                *w -= self.learning_rate * (*v);
-                            }
-                        }
-                        *vel_bias = self.momentum * (*vel_bias) + (1.0 - self.momentum) * grad_bias;
-                        *bias -= self.learning_rate * (*vel_bias);
-                    }
-                    _ => panic!("Unexpected velocity type for convolution layer"),
-                }
-            }
-            (
-                Weights::Dense { weights, bias },
-                Weights::Dense {
-                    weights: grad_weights,
-                    bias: grad_bias,
-                },
-            ) => {
-                // Ensure velocities are initialized
-                if self.dense_velocities.is_empty() {
-                    panic!("Dense velocities not initialized.");
-                }
-
-                // Get the corresponding velocity for this weight
-                let velocity = self
-                    .dense_velocities
-                    .iter_mut()
-                    .find(|v| matches!(v, Weights::Dense { .. }))
-                    .unwrap();
-
-                match velocity {
+    // Update the weights using momentum and the gradients for both dense and convolutional layers
+    pub fn update_all(
+        &mut self,
+        dense_weights: &mut Vec<Weights>,
+        dense_gradients: &Vec<Weights>,
+        conv_weights: &mut Vec<Weights>,
+        conv_gradients: &Vec<Weights>,
+    ) {
+        // Update dense weights
+        for ((weight, gradient), velocity) in dense_weights
+            .iter_mut()
+            .zip(dense_gradients.iter())
+            .zip(self.dense_velocities.iter_mut())
+        {
+            match (weight, gradient, velocity) {
+                (
+                    Weights::Dense { weights: w, bias: b },
+                    Weights::Dense {
+                        weights: grad_weights,
+                        bias: grad_bias,
+                    },
                     Weights::Dense {
                         weights: vel_weights,
                         bias: vel_bias,
-                    } => {
-                        // Update the velocities and weights for dense layers
-                        for ((v_w, g_w), w_w) in vel_weights
-                            .iter_mut()
-                            .zip(grad_weights.iter())
-                            .zip(weights.iter_mut())
-                        {
-                            *v_w = self.momentum * (*v_w) + (1.0 - self.momentum) * g_w;
-                            *w_w -= self.learning_rate * (*v_w);
-                        }
-                        *vel_bias = self.momentum * (*vel_bias) + (1.0 - self.momentum) * grad_bias;
-                        *bias -= self.learning_rate * (*vel_bias);
+                    },
+                ) => {
+                    for (w, (v, g)) in w.iter_mut().zip(vel_weights.iter_mut().zip(grad_weights)) {
+                        *v = self.momentum * (*v) + (1.0 - self.momentum) * g;
+                        *w -= self.learning_rate * (*v);
                     }
-                    _ => panic!("Unexpected velocity type for dense layer"),
+                    *vel_bias = self.momentum * (*vel_bias) + (1.0 - self.momentum) * grad_bias;
+                    *b -= self.learning_rate * (*vel_bias);
                 }
+                _ => panic!("Mismatched weight types for dense layers."),
             }
-            _ => panic!("Mismatched weight types"),
+        }
+
+        // Update convolutional weights
+        for ((weight, gradient), velocity) in conv_weights
+            .iter_mut()
+            .zip(conv_gradients.iter())
+            .zip(self.conv_velocities.iter_mut())
+        {
+            match (weight, gradient, velocity) {
+                (
+                    Weights::Convolution { kernel, bias },
+                    Weights::Convolution {
+                        kernel: grad_kernel,
+                        bias: grad_bias,
+                    },
+                    Weights::Convolution {
+                        kernel: vel_kernel,
+                        bias: vel_bias,
+                    },
+                ) => {
+                    for ((k, v), g) in kernel
+                        .iter_mut()
+                        .zip(vel_kernel.iter_mut())
+                        .zip(grad_kernel.iter())
+                    {
+                        for (k, (v, g)) in k.iter_mut().zip(v.iter_mut().zip(g)) {
+                            *v = self.momentum * (*v) + (1.0 - self.momentum) * g;
+                            *k -= self.learning_rate * (*v);
+                        }
+                    }
+                    *vel_bias = self.momentum * (*vel_bias) + (1.0 - self.momentum) * grad_bias;
+                    *bias -= self.learning_rate * (*vel_bias);
+                }
+                _ => panic!("Mismatched weight types for convolution layers."),
+            }
         }
     }
 }

@@ -248,6 +248,7 @@ pub fn backprop_dense(
 
     // If the total norm exceeds the clip_value, scale all gradients
     if total_norm > clip_value {
+        // println!("Gradient norm exceeds clip value: {}", total_norm);
         let scaling_factor = clip_value / total_norm;
 
         // Scale all gradients to clip their norm
