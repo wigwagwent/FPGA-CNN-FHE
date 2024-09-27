@@ -78,7 +78,7 @@ fn main() {
             &total_gradients.0, // Dense gradients
             &mut model.conv_weights,
             &total_gradients.1, // Convolutional gradients
-        );
+                    );
 
         let epoch_duration = epoch_start.elapsed();
         println!(
@@ -131,7 +131,7 @@ impl Model {
     }
 
     pub fn forward(&self, input: VecD2) -> VecD1 {
-        let conv_output = layers::convolution_layer(input, self.conv_weights.clone(), Activation::ReLU(0.0));
+        let conv_output = layers::convolution_layer(input, self.conv_weights.clone(), Activation::Quadratic);
         let flatten_output = layers::flatten_layer(conv_output);
         layers::dense_layer(flatten_output, self.dense_weights.clone(), Activation::Softmax)
     }
