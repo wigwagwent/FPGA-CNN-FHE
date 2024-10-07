@@ -1,5 +1,5 @@
-use fhe_ckks::Ciphertext;
 use fhe_ckks::DoubleSized;
+use fhe_ckks::TextElement;
 use num_traits::PrimInt;
 use num_traits::Signed;
 use rayon::iter::IntoParallelRefIterator;
@@ -139,16 +139,16 @@ fn dense(inputs: VecD1, weights: Weights) -> Quantized {
 }
 
 pub fn dense_layer_fhe<T, const N: usize>(
-    inputs: Ciphertext<T, N>,
+    inputs: TextElement<T, N>,
     weights: Vec<WeightsFhe<T, N>>,
     activation: Activation,
-) -> Vec<Ciphertext<T, N>>
+) -> Vec<TextElement<T, N>>
 where
     T: PrimInt + Signed + DoubleSized,
 {
-    let mut output: Vec<Ciphertext<T, N>> = Vec::new();
-    for i in 0..weights.len() {
-        let result = dense_fhe(&inputs, &weights[i]);
+    let mut output: Vec<TextElement<T, N>> = Vec::new();
+    for weight in weights.iter() {
+        let result = dense_fhe(inputs.clone(), weight.clone());
         //println!("Dense output {}: {:?}", i, result);
         output.push(result);
     }
@@ -159,9 +159,9 @@ where
 }
 
 pub fn dense_fhe<T, const N: usize>(
-    inputs: &Ciphertext<T, N>,
-    weights: &WeightsFhe<T, N>,
-) -> Ciphertext<T, N>
+    inputs: TextElement<T, N>,
+    weights: WeightsFhe<T, N>,
+) -> TextElement<T, N>
 where
     T: PrimInt + Signed + DoubleSized,
 {
@@ -169,7 +169,7 @@ where
         WeightsFhe::Dense { weights, bias } => (weights, bias),
         _ => panic!("Invalid weights for dense layer"),
     };
-    inputs.multiply_plain(weights).add_plain(bias)
+    inputs * weights + bias
 }
 
 pub fn flatten_layer(outputs: Vec<VecD2>) -> VecD1 {

@@ -89,6 +89,11 @@ where
             .multiply(&plaintext.poly, self.scaling_factor, None);
         Plaintext::new(new_poly, self.scaling_factor)
     }
+
+    pub fn rotate(&self, steps: usize) -> Plaintext<T, N> {
+        let new_poly = self.poly.rotate_right(steps);
+        Plaintext::new(new_poly, self.scaling_factor)
+    }
 }
 
 #[cfg(feature = "emulated")]
@@ -96,38 +101,6 @@ impl<T, const N: usize> Plaintext<T, N>
 where
     T: PrimInt + Signed + Clone + DoubleSized,
 {
-    pub fn multiply_cipher(&self, ciphertext: &Ciphertext<T, N>) -> Ciphertext<T, N> {
-        let new_c0 = self
-            .poly
-            .multiply(&ciphertext.c0, self.scaling_factor, None);
-        Ciphertext {
-            c0: new_c0,
-            c1: Polynomial::default(),
-            scaling_factor: self.scaling_factor,
-            modulus: ciphertext.modulus,
-        }
-    }
-
-    pub fn add_cipher(&self, ciphertext: &Ciphertext<T, N>) -> Ciphertext<T, N> {
-        let new_c0 = self.poly.add(&ciphertext.c0, None);
-        Ciphertext {
-            c0: new_c0,
-            c1: Polynomial::default(),
-            scaling_factor: self.scaling_factor,
-            modulus: ciphertext.modulus,
-        }
-    }
-
-    pub fn subtract_cipher(&self, ciphertext: &Ciphertext<T, N>) -> Ciphertext<T, N> {
-        let new_c0 = self.poly.subtract(&ciphertext.c0, None);
-        Ciphertext {
-            c0: new_c0,
-            c1: Polynomial::default(),
-            scaling_factor: self.scaling_factor,
-            modulus: ciphertext.modulus,
-        }
-    }
-
     pub fn encrypt(&self) -> Ciphertext<T, N> {
         Ciphertext::new_emulated(self.poly.clone(), self.scaling_factor)
     }
@@ -182,48 +155,6 @@ mod plaintext_test {
         let p2: Plaintext<i32, 3> = Plaintext::from_f32(vec![4.0, 5.0, 6.0], 15);
 
         let result = Vec::from(p1.subtract(&p2));
-        println!("{:?}", result);
-        assert!(result == vec![-3.0, -3.0, -3.0]);
-    }
-
-    #[test]
-    fn multiply_plain_cipher() {
-        use crate::types::plaintext::Plaintext;
-
-        let p1: Plaintext<i32, 3> = Plaintext::from_f32(vec![1.0, 2.0, 3.0], 15);
-        let p2: Plaintext<i32, 3> = Plaintext::from_f32(vec![4.0, 5.0, 6.0], 15);
-
-        let c1 = p1.encrypt();
-
-        let result = Vec::from(p2.multiply_cipher(&c1).decrypt());
-        println!("{:?}", result);
-        assert!(result == vec![4.0, 10.0, 18.0]);
-    }
-
-    #[test]
-    fn add_plain_cipher() {
-        use crate::types::plaintext::Plaintext;
-
-        let p1: Plaintext<i32, 3> = Plaintext::from_f32(vec![1.0, 2.0, 3.0], 15);
-        let p2: Plaintext<i32, 3> = Plaintext::from_f32(vec![4.0, 5.0, 6.0], 15);
-
-        let c1 = p1.encrypt();
-
-        let result = Vec::from(p2.add_cipher(&c1).decrypt());
-        println!("{:?}", result);
-        assert!(result == vec![5.0, 7.0, 9.0]);
-    }
-
-    #[test]
-    fn subtract_plain_cipher() {
-        use crate::types::plaintext::Plaintext;
-
-        let p1: Plaintext<i32, 3> = Plaintext::from_f32(vec![1.0, 2.0, 3.0], 15);
-        let p2: Plaintext<i32, 3> = Plaintext::from_f32(vec![4.0, 5.0, 6.0], 15);
-
-        let c2 = p2.encrypt();
-
-        let result = Vec::from(p1.subtract_cipher(&c2).decrypt());
         println!("{:?}", result);
         assert!(result == vec![-3.0, -3.0, -3.0]);
     }

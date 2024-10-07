@@ -1,8 +1,9 @@
+use fhe_ckks::{DoubleSized, Plaintext, TextElement};
 use mnist_lib::{self, MnistDataset, MnistImage};
-use model_layers::layers;
+use model_layers::{layers, WeightsFhe};
 use model_layers::{Activation, Quantized, SGDOptimizer, VecD1, VecD2, Weights};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator, IndexedParallelIterator}; // Import IndexedParallelIterator
-use rayon::slice::ParallelSlice;
+use num_traits::{PrimInt, Signed};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
@@ -36,7 +37,7 @@ fn main() {
             let batch_loss_gradients = batch
                 .par_iter()
                 .map(|image| {
-                    let mut local_model = model.clone();
+                    let local_model = model.clone();
                     let mut local_gradients = local_model.create_zero_gradients();
                     let mut batch_loss = 0.0;
 
@@ -78,7 +79,7 @@ fn main() {
             &total_gradients.0, // Dense gradients
             &mut model.conv_weights,
             &total_gradients.1, // Convolutional gradients
-                    );
+        );
 
         let epoch_duration = epoch_start.elapsed();
         println!(
@@ -89,7 +90,7 @@ fn main() {
         );
 
         // Evaluate the model after each epoch
-        
+
         let val_accuracy = model.validate(&val_images);
         let train_accuracy = model.validate(&train_images);
 
@@ -113,6 +114,34 @@ pub struct Model {
     dense_weights: Vec<Weights>,
 }
 
+pub struct ModelFhe<T, const N: usize>
+where
+    T: PrimInt + Signed + DoubleSized,
+{
+    conv_weights: Vec<WeightsFhe<T, N>>,
+    dense_weights: Vec<WeightsFhe<T, N>>,
+}
+
+impl<T, const N: usize> From<&Model> for ModelFhe<T, N>
+where
+    T: PrimInt + Signed + DoubleSized,
+{
+    fn from(model: &Model) -> Self {
+        ModelFhe {
+            conv_weights: model
+                .conv_weights
+                .iter()
+                .map(|w| WeightsFhe::from(w.clone()))
+                .collect(),
+            dense_weights: model
+                .dense_weights
+                .iter()
+                .map(|w| WeightsFhe::from(w.clone()))
+                .collect(),
+        }
+    }
+}
+
 impl Model {
     pub fn new(mut weights: Vec<Weights>) -> Self {
         let dense_weights = weights.split_off(weights.len() - 10);
@@ -131,12 +160,44 @@ impl Model {
     }
 
     pub fn forward(&self, input: VecD2) -> VecD1 {
-        let conv_output = layers::convolution_layer(input, self.conv_weights.clone(), Activation::Quadratic);
+        let conv_output =
+            layers::convolution_layer(input, self.conv_weights.clone(), Activation::Quadratic);
         let flatten_output = layers::flatten_layer(conv_output);
-        layers::dense_layer(flatten_output, self.dense_weights.clone(), Activation::Softmax)
+        layers::dense_layer(
+            flatten_output,
+            self.dense_weights.clone(),
+            Activation::Softmax,
+        )
     }
 
-    pub fn compute_gradients(&self, input: VecD2, target: Vec<f32>) -> (f32, (Vec<Weights>, Vec<Weights>)) {
+    pub fn forward_fhe(&self, input: VecD2) -> VecD1 {
+        let fhe_model: ModelFhe<i64, 5408> = ModelFhe::from(self);
+
+        let conv_output =
+            layers::convolution_layer(input, self.conv_weights.clone(), Activation::Quadratic);
+        let flatten_output = layers::flatten_layer(conv_output);
+        let flatten_output_fhe: TextElement<i64, 5408> =
+            Plaintext::from_f32(flatten_output, 15).into();
+
+        let dense_output = layers::dense_layer_fhe(
+            flatten_output_fhe,
+            fhe_model.dense_weights.clone(),
+            Activation::None,
+        );
+
+        let decrypted_dense_output: VecD1 = dense_output
+            .iter()
+            .map(|val| Vec::from(val.decrypt()).iter().sum())
+            .collect();
+
+        layers::activation_layer(decrypted_dense_output, Activation::Softmax)
+    }
+
+    pub fn compute_gradients(
+        &self,
+        input: VecD2,
+        target: Vec<f32>,
+    ) -> (f32, (Vec<Weights>, Vec<Weights>)) {
         // Forward pass
         let conv_output = layers::convolution_layer(
             input.clone(),
@@ -164,15 +225,34 @@ impl Model {
         );
 
         let conv_grad = layers::unflatten_gradient(&flatten_grad, &conv_output);
-        let conv_gradients = layers::backprop_conv(&input, &conv_output, &conv_grad, &self.conv_weights, clip_value);
+        let conv_gradients = layers::backprop_conv(
+            &input,
+            &conv_output,
+            &conv_grad,
+            &self.conv_weights,
+            clip_value,
+        );
 
         (loss, (dense_gradients, conv_gradients))
     }
 
-    pub fn accumulate_gradients(&self, acc_gradients: &mut (Vec<Weights>, Vec<Weights>), gradients: &(Vec<Weights>, Vec<Weights>)) {
+    pub fn accumulate_gradients(
+        &self,
+        acc_gradients: &mut (Vec<Weights>, Vec<Weights>),
+        gradients: &(Vec<Weights>, Vec<Weights>),
+    ) {
         for (acc, grad) in acc_gradients.0.iter_mut().zip(gradients.0.iter()) {
             match (acc, grad) {
-                (Weights::Dense { weights: acc_w, bias: acc_b }, Weights::Dense { weights: grad_w, bias: grad_b }) => {
+                (
+                    Weights::Dense {
+                        weights: acc_w,
+                        bias: acc_b,
+                    },
+                    Weights::Dense {
+                        weights: grad_w,
+                        bias: grad_b,
+                    },
+                ) => {
                     for (a, g) in acc_w.iter_mut().zip(grad_w.iter()) {
                         *a += g;
                     }
@@ -184,7 +264,16 @@ impl Model {
 
         for (acc, grad) in acc_gradients.1.iter_mut().zip(gradients.1.iter()) {
             match (acc, grad) {
-                (Weights::Convolution { kernel: acc_k, bias: acc_b }, Weights::Convolution { kernel: grad_k, bias: grad_b }) => {
+                (
+                    Weights::Convolution {
+                        kernel: acc_k,
+                        bias: acc_b,
+                    },
+                    Weights::Convolution {
+                        kernel: grad_k,
+                        bias: grad_b,
+                    },
+                ) => {
                     for (a_row, g_row) in acc_k.iter_mut().zip(grad_k.iter()) {
                         for (a, g) in a_row.iter_mut().zip(g_row.iter()) {
                             *a += g;
@@ -197,13 +286,26 @@ impl Model {
         }
     }
 
-    pub fn sum_gradients(&self, grad1: &(Vec<Weights>, Vec<Weights>), grad2: &(Vec<Weights>, Vec<Weights>)) -> (Vec<Weights>, Vec<Weights>) {
+    pub fn sum_gradients(
+        &self,
+        grad1: &(Vec<Weights>, Vec<Weights>),
+        grad2: &(Vec<Weights>, Vec<Weights>),
+    ) -> (Vec<Weights>, Vec<Weights>) {
         let dense_sum = grad1
             .0
             .iter()
             .zip(grad2.0.iter())
             .map(|(w1, w2)| match (w1, w2) {
-                (Weights::Dense { weights: w1, bias: b1 }, Weights::Dense { weights: w2, bias: b2 }) => Weights::Dense {
+                (
+                    Weights::Dense {
+                        weights: w1,
+                        bias: b1,
+                    },
+                    Weights::Dense {
+                        weights: w2,
+                        bias: b2,
+                    },
+                ) => Weights::Dense {
                     weights: w1.iter().zip(w2.iter()).map(|(a, b)| a + b).collect(),
                     bias: b1 + b2,
                 },
@@ -216,8 +318,23 @@ impl Model {
             .iter()
             .zip(grad2.1.iter())
             .map(|(w1, w2)| match (w1, w2) {
-                (Weights::Convolution { kernel: k1, bias: b1 }, Weights::Convolution { kernel: k2, bias: b2 }) => Weights::Convolution {
-                    kernel: k1.iter().zip(k2.iter()).map(|(row1, row2)| row1.iter().zip(row2.iter()).map(|(a, b)| a + b).collect()).collect(),
+                (
+                    Weights::Convolution {
+                        kernel: k1,
+                        bias: b1,
+                    },
+                    Weights::Convolution {
+                        kernel: k2,
+                        bias: b2,
+                    },
+                ) => Weights::Convolution {
+                    kernel: k1
+                        .iter()
+                        .zip(k2.iter())
+                        .map(|(row1, row2)| {
+                            row1.iter().zip(row2.iter()).map(|(a, b)| a + b).collect()
+                        })
+                        .collect(),
                     bias: b1 + b2,
                 },
                 _ => panic!("Mismatched weight types"),
@@ -227,25 +344,30 @@ impl Model {
         (dense_sum, conv_sum)
     }
 
-    pub fn update_parameters(&mut self, gradients: (Vec<Weights>, Vec<Weights>), optimizer: &mut SGDOptimizer) {
+    pub fn update_parameters(
+        &mut self,
+        gradients: (Vec<Weights>, Vec<Weights>),
+        optimizer: &mut SGDOptimizer,
+    ) {
         optimizer.update_all(
-            &mut self.dense_weights,      // Pass mutable reference to dense weights
-            &gradients.0,                 // Pass dense gradients
-            &mut self.conv_weights,       // Pass mutable reference to convolutional weights
-            &gradients.1,                 // Pass convolutional gradients
+            &mut self.dense_weights, // Pass mutable reference to dense weights
+            &gradients.0,            // Pass dense gradients
+            &mut self.conv_weights,  // Pass mutable reference to convolutional weights
+            &gradients.1,            // Pass convolutional gradients
         );
     }
 
     pub fn validate(&self, images: &Vec<MnistImage>) -> usize {
         let correct_count = AtomicUsize::new(0);
-        images.par_iter().for_each(|image| {
+        images.iter().for_each(|image| {
             let image_data: VecD2 = image
                 .data
                 .iter()
                 .map(|row| row.iter().map(|&pixel| pixel as f32).collect())
                 .collect();
 
-            let output = self.forward(image_data);
+            //let output = self.forward(image_data.clone());
+            let output = self.forward_fhe(image_data);
             let predicted_class = get_predicted_class(output);
 
             if image.label == mnist_lib::MnistDigit::from_usize(predicted_class) {

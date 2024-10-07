@@ -1,8 +1,9 @@
 use num_traits::{PrimInt, Signed};
 
 use crate::{
-    util::random_samples::sample_triangle, Ciphertext, CkksEncryption, DoubleSized, Plaintext,
-    Polynomial,
+    types::ciphertext::Ciphertext, types::plaintext::Plaintext,
+    types::polynomial::double_size::DoubleSized, types::polynomial::Polynomial,
+    util::random_samples::sample_triangle, CkksEncryption,
 };
 
 /// Encrypts a message with secret key encryption.

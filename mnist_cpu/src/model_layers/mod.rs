@@ -1,4 +1,4 @@
-use fhe_ckks::{DoubleSized, Plaintext};
+use fhe_ckks::{DoubleSized, Plaintext, TextElement};
 use num_traits::{PrimInt, Signed};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ pub enum Weights {
     Dense { weights: VecD1, bias: Quantized },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum WeightsFhe<T, const N: usize>
 where
     T: PrimInt + Signed + DoubleSized,
@@ -28,8 +28,8 @@ where
         bias: Quantized,
     },
     Dense {
-        weights: Plaintext<T, N>,
-        bias: Plaintext<T, N>,
+        weights: TextElement<T, N>,
+        bias: TextElement<T, N>,
     },
 }
 
@@ -41,8 +41,8 @@ where
         match weights {
             Weights::Convolution { kernel, bias } => WeightsFhe::Convolution { kernel, bias },
             Weights::Dense { weights, bias } => WeightsFhe::Dense {
-                weights: Plaintext::from_f32(weights.clone(), 15),
-                bias: Plaintext::from_f32(vec![bias; weights.len()], 15),
+                weights: Plaintext::from_f32(weights.clone(), 15).into(),
+                bias: Plaintext::from_f32(vec![bias; weights.len()], 15).into(),
             },
         }
     }
@@ -143,7 +143,10 @@ impl SGDOptimizer {
         {
             match (weight, gradient, velocity) {
                 (
-                    Weights::Dense { weights: w, bias: b },
+                    Weights::Dense {
+                        weights: w,
+                        bias: b,
+                    },
                     Weights::Dense {
                         weights: grad_weights,
                         bias: grad_bias,

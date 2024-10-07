@@ -1,6 +1,10 @@
 use num_traits::{PrimInt, Signed};
 
-use crate::{Ciphertext, CkksEncryption, DoubleSized, Plaintext, Polynomial};
+use crate::types::ciphertext::Ciphertext;
+use crate::types::plaintext::Plaintext;
+use crate::types::polynomial::double_size::DoubleSized;
+use crate::types::polynomial::Polynomial;
+use crate::CkksEncryption;
 
 impl<T: PrimInt + Signed + DoubleSized, const N: usize> CkksEncryption<T, N> {
     /// Decrypts a ciphertext.

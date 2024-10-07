@@ -1,7 +1,7 @@
 use num_traits::{PrimInt, Signed};
 use rand::Rng;
 
-use crate::DoubleSized;
+use crate::types::polynomial::double_size::DoubleSized;
 
 /// Samples from a Hamming weight distribution.
 ///

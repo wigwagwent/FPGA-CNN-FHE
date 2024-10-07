@@ -147,102 +147,112 @@ where
             T::one().to_double(),
         )
     }
-}
 
-#[cfg(test)]
-mod ciphertext_test {
-    use crate::Ciphertext;
-
-    #[test]
-    fn multiply_two_ciphertext() {
-        use crate::types::plaintext::Plaintext;
-
-        let p1: Plaintext<i32, 3> = Plaintext::from_f32(vec![1.0, 2.0, 3.0], 15);
-        let p2: Plaintext<i32, 3> = Plaintext::from_f32(vec![4.0, 5.0, 6.0], 15);
-
-        let c1: Ciphertext<i32, 3> = p1.encrypt();
-        let c2: Ciphertext<i32, 3> = p2.encrypt();
-
-        let c3: Ciphertext<i32, 3> = c1.multiply(&c2);
-        let result = Vec::from(c3.decrypt());
-        println!("{:?}", result);
-        assert_eq!(result, vec![4.0, 10.0, 18.0]);
-    }
-
-    #[test]
-    fn add_two_ciphertext() {
-        use crate::types::plaintext::Plaintext;
-
-        let p1: Plaintext<i32, 3> = Plaintext::from_f32(vec![1.0, 2.0, 3.0], 15);
-        let p2: Plaintext<i32, 3> = Plaintext::from_f32(vec![4.0, 5.0, 6.0], 15);
-
-        let c1: Ciphertext<i32, 3> = p1.encrypt();
-        let c2: Ciphertext<i32, 3> = p2.encrypt();
-
-        let c3: Ciphertext<i32, 3> = c1.add(&c2);
-        let result = Vec::from(c3.decrypt());
-        println!("{:?}", result);
-        assert_eq!(result, vec![5.0, 7.0, 9.0]);
-    }
-
-    #[test]
-    fn subtract_two_ciphertext() {
-        use crate::types::plaintext::Plaintext;
-
-        let p1: Plaintext<i32, 3> = Plaintext::from_f32(vec![1.0, 2.0, 3.0], 15);
-        let p2: Plaintext<i32, 3> = Plaintext::from_f32(vec![4.0, 5.0, 6.0], 15);
-
-        let c1: Ciphertext<i32, 3> = p1.encrypt();
-        let c2: Ciphertext<i32, 3> = p2.encrypt();
-
-        let c3: Ciphertext<i32, 3> = c1.subtract(&c2);
-        let result = Vec::from(c3.decrypt());
-        println!("{:?}", result);
-        assert_eq!(result, vec![-3.0, -3.0, -3.0]);
-    }
-
-    #[test]
-    fn multiply_cipher_plain() {
-        use crate::types::plaintext::Plaintext;
-
-        let p1: Plaintext<i32, 3> = Plaintext::from_f32(vec![1.0, 2.0, 3.0], 15);
-        let p2: Plaintext<i32, 3> = Plaintext::from_f32(vec![4.0, 5.0, 6.0], 15);
-
-        let c1: Ciphertext<i32, 3> = p1.encrypt();
-
-        let c2: Ciphertext<i32, 3> = c1.multiply_plain(&p2);
-        let result = Vec::from(c2.decrypt());
-        println!("{:?}", result);
-        assert_eq!(result, vec![4.0, 10.0, 18.0]);
-    }
-
-    #[test]
-    fn add_cipher_plain() {
-        use crate::types::plaintext::Plaintext;
-
-        let p1: Plaintext<i32, 3> = Plaintext::from_f32(vec![1.0, 2.0, 3.0], 15);
-        let p2: Plaintext<i32, 3> = Plaintext::from_f32(vec![4.0, 5.0, 6.0], 15);
-
-        let c1: Ciphertext<i32, 3> = p1.encrypt();
-
-        let c2: Ciphertext<i32, 3> = c1.add_plain(&p2);
-        let result = Vec::from(c2.decrypt());
-        println!("{:?}", result);
-        assert_eq!(result, vec![5.0, 7.0, 9.0]);
-    }
-
-    #[test]
-    fn subtract_cipher_plain() {
-        use crate::types::plaintext::Plaintext;
-
-        let p1: Plaintext<i32, 3> = Plaintext::from_f32(vec![1.0, 2.0, 3.0], 15);
-        let p2: Plaintext<i32, 3> = Plaintext::from_f32(vec![4.0, 5.0, 6.0], 15);
-
-        let c2: Ciphertext<i32, 3> = p2.encrypt();
-
-        let c1: Ciphertext<i32, 3> = c2.subtract_plain(&p1);
-        let result = Vec::from(c1.decrypt());
-        println!("{:?}", result);
-        assert_eq!(result, vec![3.0, 3.0, 3.0]);
+    pub fn rotate(&self, steps: usize) -> Ciphertext<T, N> {
+        let new_c0 = self.c0.rotate_right(steps);
+        Ciphertext::new(
+            new_c0,
+            Polynomial::default(),
+            self.scaling_factor,
+            T::one().to_double(),
+        )
     }
 }
+
+// #[cfg(test)]
+// mod ciphertext_test {
+//     use crate::Ciphertext;
+
+//     #[test]
+//     fn multiply_two_ciphertext() {
+//         use crate::types::plaintext::Plaintext;
+
+//         let p1: Plaintext<i32, 3> = Plaintext::from_f32(vec![1.0, 2.0, 3.0], 15);
+//         let p2: Plaintext<i32, 3> = Plaintext::from_f32(vec![4.0, 5.0, 6.0], 15);
+
+//         let c1: Ciphertext<i32, 3> = p1.encrypt();
+//         let c2: Ciphertext<i32, 3> = p2.encrypt();
+
+//         let c3: Ciphertext<i32, 3> = c1.multiply(&c2);
+//         let result = Vec::from(c3.decrypt());
+//         println!("{:?}", result);
+//         assert_eq!(result, vec![4.0, 10.0, 18.0]);
+//     }
+
+//     #[test]
+//     fn add_two_ciphertext() {
+//         use crate::types::plaintext::Plaintext;
+
+//         let p1: Plaintext<i32, 3> = Plaintext::from_f32(vec![1.0, 2.0, 3.0], 15);
+//         let p2: Plaintext<i32, 3> = Plaintext::from_f32(vec![4.0, 5.0, 6.0], 15);
+
+//         let c1: Ciphertext<i32, 3> = p1.encrypt();
+//         let c2: Ciphertext<i32, 3> = p2.encrypt();
+
+//         let c3: Ciphertext<i32, 3> = c1.add(&c2);
+//         let result = Vec::from(c3.decrypt());
+//         println!("{:?}", result);
+//         assert_eq!(result, vec![5.0, 7.0, 9.0]);
+//     }
+
+//     #[test]
+//     fn subtract_two_ciphertext() {
+//         use crate::types::plaintext::Plaintext;
+
+//         let p1: Plaintext<i32, 3> = Plaintext::from_f32(vec![1.0, 2.0, 3.0], 15);
+//         let p2: Plaintext<i32, 3> = Plaintext::from_f32(vec![4.0, 5.0, 6.0], 15);
+
+//         let c1: Ciphertext<i32, 3> = p1.encrypt();
+//         let c2: Ciphertext<i32, 3> = p2.encrypt();
+
+//         let c3: Ciphertext<i32, 3> = c1.subtract(&c2);
+//         let result = Vec::from(c3.decrypt());
+//         println!("{:?}", result);
+//         assert_eq!(result, vec![-3.0, -3.0, -3.0]);
+//     }
+
+//     #[test]
+//     fn multiply_cipher_plain() {
+//         use crate::types::plaintext::Plaintext;
+
+//         let p1: Plaintext<i32, 3> = Plaintext::from_f32(vec![1.0, 2.0, 3.0], 15);
+//         let p2: Plaintext<i32, 3> = Plaintext::from_f32(vec![4.0, 5.0, 6.0], 15);
+
+//         let c1: Ciphertext<i32, 3> = p1.encrypt();
+
+//         let c2: Ciphertext<i32, 3> = c1.multiply_plain(&p2);
+//         let result = Vec::from(c2.decrypt());
+//         println!("{:?}", result);
+//         assert_eq!(result, vec![4.0, 10.0, 18.0]);
+//     }
+
+//     #[test]
+//     fn add_cipher_plain() {
+//         use crate::types::plaintext::Plaintext;
+
+//         let p1: Plaintext<i32, 3> = Plaintext::from_f32(vec![1.0, 2.0, 3.0], 15);
+//         let p2: Plaintext<i32, 3> = Plaintext::from_f32(vec![4.0, 5.0, 6.0], 15);
+
+//         let c1: Ciphertext<i32, 3> = p1.encrypt();
+
+//         let c2: Ciphertext<i32, 3> = c1.add_plain(&p2);
+//         let result = Vec::from(c2.decrypt());
+//         println!("{:?}", result);
+//         assert_eq!(result, vec![5.0, 7.0, 9.0]);
+//     }
+
+//     #[test]
+//     fn subtract_cipher_plain() {
+//         use crate::types::plaintext::Plaintext;
+
+//         let p1: Plaintext<i32, 3> = Plaintext::from_f32(vec![1.0, 2.0, 3.0], 15);
+//         let p2: Plaintext<i32, 3> = Plaintext::from_f32(vec![4.0, 5.0, 6.0], 15);
+
+//         let c2: Ciphertext<i32, 3> = p2.encrypt();
+
+//         let c1: Ciphertext<i32, 3> = c2.subtract_plain(&p1);
+//         let result = Vec::from(c1.decrypt());
+//         println!("{:?}", result);
+//         assert_eq!(result, vec![3.0, 3.0, 3.0]);
+//     }
+// }

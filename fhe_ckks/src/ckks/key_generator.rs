@@ -1,5 +1,6 @@
-use crate::Polynomial;
-use crate::{util::random_samples::sample_hamming_weight_vector, DoubleSized};
+use crate::types::polynomial::double_size::DoubleSized;
+use crate::types::polynomial::Polynomial;
+use crate::util::random_samples::sample_hamming_weight_vector;
 use num_traits::{PrimInt, Signed};
 
 pub struct CkksEncryption<T: PrimInt + Signed + DoubleSized, const N: usize> {
